@@ -12,7 +12,7 @@ published: true
 meta:
   _edit_last: '1'
 ---
-One of the appealing features of Clojure is the pervasive use of (efficient!) persistent data structures. (In previous posts I've shed some light on how <a href="http://blog.higher-order.net/2009/09/08/understanding-clojures-persistenthashmap-deftwice/">PersistentHashMap</a> and <a href="http://blog.higher-order.net/2009/02/01/understanding-clojures-persistentvector-implementation/">PersistentVector</a> are implemented, although some of that information is slightly dated now).
+One of the appealing features of Clojure is the pervasive use of (efficient!) persistent data structures. (In previous posts I've shed some light on how <a href="http://blog.higher-order.net/2009/09/08/understanding-clojures-persistenthashmap-deftwice">PersistentHashMap</a> and <a href="http://blog.higher-order.net/2009/02/01/understanding-clojures-persistentvector-implementation">PersistentVector</a> are implemented, although some of that information is slightly dated now).
 
 There are many advantages to programming with persistent data structures (which implies immutability) but that isn't the topic of this post... Currently the Clojure data structures are implemented in Java, so in principle they should be usable also outside of Clojure, say from Java.  However, in practice it is inconvenient (see below). 
 
@@ -49,4 +49,4 @@ clj-ds will support generics.
 * Finally, a slight improvement.  Certain of the Clojure data structure methods use Clojure's 'seq' abstraction. In the implementation of the Java 'iterator' pattern. It is possible, to make
 slightly more efficient iterators using a tailor made iterator. clj-ds does this.
 
-Code: <a href="http://github.com/krukow/clj-ds">http://github.com/krukow/clj-ds</a> 
+Code: <a href="http://github.com/krukow/clj-ds">http://github.com/krukow/clj-ds</a>
