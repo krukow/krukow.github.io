@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <title>One aspect of lazy computation</title>
+        <meta name="viewport" content="width=device-width">
+
+        <!-- syntax highlighting CSS -->
+        <link rel="stylesheet" href="/css/syntax.css">
+
+        <!-- Custom CSS -->
+        <link rel="stylesheet" href="/css/main.css">
+
+    </head>
+    <body>
+
+        <div class="site">
+          <div class="header">
+            <h1 class="title"><a href="/">Your New Jekyll Site</a></h1>
+            <a class="extra" href="/">home</a>
+          </div>
+
+          <h2>One aspect of lazy computation</h2>
+<p class="meta">23 Apr 2009</p>
+
+<div class="post">
+I've often needed to do a combination of filtering and mapping on arrays. E.g. in a Ruby on Rails app, I might have a list of "RecurringActivation" model objects which have a product_id and an integer period. Now I would like a list of product_ids where the current time "matches" the period; in code this might be:
+<pre><tt><span class="comment">#version 1 - 'functional'</span>
+<span class="normal">cur_period </span><span class="symbol">=</span><span class="normal"> Time</span><span class="symbol">.</span><span class="normal">now</span><span class="symbol">.</span><span class="normal">month </span><span class="symbol">-</span><span class="normal"> </span><span class="number">1</span>
+<span class="normal">RecurringActivation</span><span class="symbol">.</span><span class="normal">find</span><span class="symbol">(:</span><span class="normal">all</span><span class="symbol">,</span><span class="normal"> </span><span class="symbol">:</span><span class="normal">select </span><span class="symbol">=&gt;</span><span class="normal"> </span><span class="string">"product_id, period"</span><span class="symbol">).</span><span class="normal">select </span><span class="cbracket">{</span><span class="normal"> </span><span class="symbol">|</span><span class="normal">r</span><span class="symbol">|</span>
+<span class="normal">  cur_period </span><span class="symbol">%</span><span class="normal"> r</span><span class="symbol">.</span><span class="normal">period </span><span class="symbol">==</span><span class="normal"> </span><span class="number">0</span>
+<span class="cbracket">}</span><span class="symbol">.</span><span class="normal">map </span><span class="symbol">&amp;:</span><span class="normal">product_id</span>
+
+
+<span class="comment">#version 2 - 'imperative'</span>
+<span class="normal">cur_period </span><span class="symbol">=</span><span class="normal"> Time</span><span class="symbol">.</span><span class="normal">now</span><span class="symbol">.</span><span class="normal">month </span><span class="symbol">-</span><span class="normal"> </span><span class="number">1</span>
+<span class="normal">result </span><span class="symbol">=</span><span class="normal"> </span><span class="symbol">[]</span>
+<span class="normal">RecurringActivation</span><span class="symbol">.</span><span class="normal">find</span><span class="symbol">(:</span><span class="normal">all</span><span class="symbol">,</span><span class="normal"> </span><span class="symbol">:</span><span class="normal">select </span><span class="symbol">=&gt;</span><span class="normal"> </span><span class="string">"product_id, period"</span><span class="symbol">).</span><span class="normal">each </span><span class="cbracket">{</span><span class="normal"> </span><span class="symbol">|</span><span class="normal">r</span><span class="symbol">|</span>
+<span class="normal">  result </span><span class="symbol">&lt;&lt;</span><span class="normal"> r</span><span class="symbol">.</span><span class="normal">product_id  </span><span class="keyword">if</span><span class="normal"> cur_period </span><span class="symbol">%</span><span class="normal"> r</span><span class="symbol">.</span><span class="normal">period </span><span class="symbol">==</span><span class="normal"> </span><span class="number">0</span>
+<span class="cbracket">}</span></tt></pre>
+In the first version I compose functions (methods) 'select' and 'map': the blocks have no side-effects, and this is why I call it 'functional.' This is shorter and more clear. Of course, this is implemented by the library using iteration and imperative assignment, but at least my code feels functional.
+
+In the second version I use 'each' with a block that does both filtering and 'mapping' in one step: I add the product_id explicitly to the products array for each object which satisfies my criterion. 
+
+Notice that the first version first produces a complete filtered list which is then passed on to the map method which produces a complete mapped and filtered list: the list is iterated twice, and an intermediate array containing only the filtered objects exists in memory and is later collected as garbage. In the second version the list is only iterated once, and such an intermediate array of filtered objects is never allocated. Hence one might choose the latter for performance reasons. 
+
+Now consider the same in Clojure or any lazy functional language. We might have (no active record here):
+<pre><tt>
+krukow:~/Projects/private/okooko-prod/tmp$ cl
+Clojure
+user=> (<span class="keyword">def</span> recurring_activations '({:product_id 1 :period 2} 
+                                    {:product_id 2 :period 3}
+				    {:product_id 3 :period 2}))
+#'user/recurring_activations
+user=> (<span class="keyword">def</span> res
+         (map <span class="symbol">#</span>(<span class="keyword">do</span> (println <span class="string">"map"</span>) (<span class="symbol">:product_id</span> <span class="symbol">%</span>))
+             (filter <span class="symbol">#</span>(<span class="keyword">do</span> (println <span class="string">"filter"</span>) (= 0 (mod (:period <span class="symbol">%</span>) <span class="number">2</span>)))
+                 recurring_activations)))
+#'user/res
+user=> 
+</tt></pre>
+Nothing has been mapped or filtered yet since Clojure is fully lazy. So res is now a lazy seq which will compute exactly what is needed on demand. Now think about what will happen if I just peek at the first element of res… In a non-lazy language, already the entire recurring_activations list would have been filtered (printing "filter" three times), then that result would have been mapped (printing "map" twice) and finally the first element would be looked up. So the output would be 
+"filter"
+"filter"
+"filter"
+"map"
+"map"
+(return first element of list).
+
+What happens in Clojure? It prints "filter" "map" and gives the first element:
+ <pre><tt>
+user=> (first res)
+filter
+map
+1
+user=> 
+</tt></pre>
+In effect we don't need an intermediate list containing the filtered elements which is then garbage collected. Notice also that if we just look at the entire list (recomputing res first) we get:
+ <pre><tt>
+user=> res
+(filter
+map
+filter
+filter
+map
+1 3)
+user=>
+</tt></pre>
+So the side effects are evaluated in a different order than had we realized the entire filtered list first. This can be counter intuitive when one is used to eager languages (which all mainstream languages are); however, once understood laziness can be extremely powerful and elegant.
+
+In effect, <em>in lazy languages we can compose functions that work on entire sequences, e.g., map and filter, to obtain a lazy sequence which evaluates the all of the composed functions on each element in sequence.</em> 
+
+If that sounded abstract and poorly phrased, I can try to say it more concretely: In Ruby (or Java) I would need to write a new function: filter_and_map taking two "blocks"/"procs" and a list, then using e.g. "each" on the list and apply first the filter "proc" then the map "proc" -- the existing functions "map" and "select" can't help me. In Clojure (or Haskell) I can simply compose the existing library functions filter and map to obtain the same thing:
+<pre><tt>
+(def filter_map
+	(comp (partial map :product_id)
+	          (partial filter #(= 0 (mod (:period %) 2)))))
+</pre></tt>
+or just use it inline
+<pre><tt>
+user=> (def res
+	(map :product_id
+	 (filter #(= 0 (mod (:period %) 2)) recurring_activations)))
+#'user/res
+user=> res
+(1 3)
+user=> 
+</pre></tt> 
+
+</div>
+
+
+          <div class="footer">
+            <div class="contact">
+              <p>
+                Your Name<br />
+                What You Are<br />
+                you@example.com
+              </p>
+            </div>
+            <div class="contact">
+              <p>
+                <a href="https://github.com/yourusername">github.com/yourusername</a><br />
+                <a href="https://twitter.com/yourusername">twitter.com/yourusername</a><br />
+              </p>
+            </div>
+          </div>
+        </div>
+
+    </body>
+</html>

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <title>Understanding Clojure's PersistentHashMap (deftwice...)</title>
+        <meta name="viewport" content="width=device-width">
+
+        <!-- syntax highlighting CSS -->
+        <link rel="stylesheet" href="/css/syntax.css">
+
+        <!-- Custom CSS -->
+        <link rel="stylesheet" href="/css/main.css">
+
+    </head>
+    <body>
+
+        <div class="site">
+          <div class="header">
+            <h1 class="title"><a href="/">Your New Jekyll Site</a></h1>
+            <a class="extra" href="/">home</a>
+          </div>
+
+          <h2>Understanding Clojure's PersistentHashMap (deftwice...)</h2>
+<p class="meta">08 Sep 2009</p>
+
+<div class="post">
+[sept. 8th, 21:22: fixed a +/- 1 error]
+
+In a previous post, I gave a high-level description of <a href="http://blog.higher-order.net/?p=233">how Clojure's PersistentVector is implemented.</a> While the code has changed, the description was high-level enough that the explanations still hold (although some code snipplets don't correspond to what's in <a href="http://github.com/richhickey/clojure/tree/master">Git master</a>.) 
+
+In this post, I'll try to explain (also at a high level) how <code>clojure.lang.PersistentHashMap</code> works internally. Reading the mentioned post on PersistentVector is helpful as some of the concepts are the same (e.g., bit-partitioning). 
+
+<strong>Persistent</strong>
+PersistentHashMap is a persistent version of the classical hash table data structure. Persistent means that the data structure is immutable, yet has efficient non-destructive operations that correspond to the operations on the classical hash table. E.g., put(K,V) in hash table corresponds to a side-effect free function assoc(P, K, V) which computes from P a new PersistentHashMap P' which is like P except that it maps key K to value V. The word "efficient" means "on par" with their mutating counterparts. For Clojure data structures, Rich tries to make them within 1-4 of the Java data structure operations; and read-only operations can even be faster than Java's. Later I will cover 'transients' which are a new optimization that make "batch" operations faster.
+
+<strong>Array-mapped hash trie</strong>
+In his paper <a href="http://lampwww.epfl.ch/papers/idealhashtrees.pdf">Ideal Hash Tries</a> Phil Bagwell describes a data structure "Hash Array Mapped Trie" which is an efficient implementation of a Hash Tree, based on a combination of hashing and the <a href="http://en.wikipedia.org/wiki/Trie">trie data structure.</a> Hash Array Mapped Tries, are not persistent or immutable. What Rich did was create a persistent version of Bagwell's data structure; <tt>clojure.lang.PersistentHashMap</tt>.
+
+<strong>PersistentHashMap basic idea</strong>
+PersistentHashMap (PHM) maintains a very-wide tree, each node having up to 32 children. Each node is a concrete implementation of a static inner interface, <tt>INode</tt>, and there are five implementations of this interface: EmptyNode, LeafNode, FullNode, HashCollisionNode, BitmapIndexedNode. I'll only cover EmptyNode, LeafNode and BitmapIndexedNode; the latter being where most of the interesting stuff happens. 
+
+The <tt>INode</tt> interface look like this:
+<pre><tt><span class="keyword">static</span><span class="normal"> </span><span class="keyword">interface</span><span class="normal"> </span><span class="classname">INode</span><span class="cbracket">{</span>
+<span class="normal">    INode </span><span class="function">assoc</span><span class="symbol">(</span><span class="type">int</span><span class="normal"> shift</span><span class="symbol">,</span><span class="normal"> </span><span class="type">int</span><span class="normal"> hash</span><span class="symbol">,</span><span class="normal"> Object key</span><span class="symbol">,</span><span class="normal"> Object val</span><span class="symbol">,</span><span class="normal"> Box addedLeaf</span><span class="symbol">);</span>
+<span class="normal">    LeafNode </span><span class="function">find</span><span class="symbol">(</span><span class="type">int</span><span class="normal"> hash</span><span class="symbol">,</span><span class="normal"> Object key</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="comment">//I've left out a few methods</span>
+<span class="cbracket">}</span>
+</tt></pre>
+
+The <tt>assoc</tt> method "adds" a new key-value pair to the map. The <tt>find</tt> method searches for the Leaf-node holding a key.
+
+An EmptyNode simply represents the empty hash map. LeafNodes are also pretty simple; they hold the actual entries stored in map. 
+
+The root node of the tree is initially an EmptyNode. When assoc is called on EmptyNode, it returns a new LeafNode, which the key-value pair. So EmptyNode "becomes" a LeafNode with assoc. In turn, a LeafNode typically "becomes" a BitmapIndexedNode with assoc.  We will go into details with BitmapIndexedNode, but first we need to understand...
+
+<strong>Bit-partitioning of hash-codes</strong>
+When PHM assocs a key object K with value object V, it first computes the hashCode of K, just as a hash-table would. The hash code of K yields an int, which has a 32-bit representation in Java (as I explained in <a href="http://blog.higher-order.net/?p=233">the post on PersistentVector</a>). Here are some example bit representations of numbers:
+
+<img src="http://blog.higher-order.net/files/clj/bitpartitioning1.png" alt="PersistentHashMap ilustration 1" />
+
+The trick that PHM uses is to partition this bit representation in to blocks of 5-bits, represented with colors in the above example. Each block corresponds to a "level" in the tree structure; for example, the right-most green block corresponds to root-level, and the orange block corresponds to the children of the root. Exactly what "corresponds" means is described below.  Levels are multiples of 5. I.e., the root level is level 0, the children of the root are level 5, the grand-children of the root are level 10, etc. Note that a block of five bits corresponds to a number in the range 0-31.  
+
+The reason that levels are multiples of five is the following: You have a bit-representation of a hash-code and you are interested in a particular block corresponding to a level <tt>n</tt>. You obtain this number in two steps: first move the block of bits to the right, until it is the right-most block. Then null-out all other bits except this right-most block. The is done with two bit-operations: you simply right-shift the bits with the level <tt>n</tt> and then do a bit-wise 'and' (<tt>&amp;</tt>) with the pattern <tt>00..11111</tt>. For example, suppose you want the block corresponding to level 5 (the orange block) of the number 1258 (binary: <tt>[00001][00111][01010]</tt>). You right shift with the level, 5, which is <tt>[00000][00001][00111]</tt>; then do the null'ing, yielding <tt>[00111]</tt>, which was exactly the orange block of 1258.
+
+The following function does this.
+<pre><tt><span class="keyword">static</span><span class="normal"> </span><span class="type">int</span><span class="normal"> </span><span class="function">mask</span><span class="symbol">(</span><span class="type">int</span><span class="normal"> hash</span><span class="symbol">,</span><span class="normal"> </span><span class="type">int</span><span class="normal"> shift</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal">	</span><span class="keyword">return</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">hash </span><span class="symbol">&gt;&gt;&gt;</span><span class="normal"> shift</span><span class="symbol">)</span><span class="normal"> </span><span class="symbol">&amp;</span><span class="normal"> </span><span class="number">0x01f</span><span class="symbol">;</span>
+<span class="cbracket">}</span></tt></pre>
+
+
+<strong>Illustrating the tree structure</strong>
+I'll use the following picture (adapted from one of Rich's slides). 
+<center>
+<img src="http://blog.higher-order.net/files/clj/persistenthashmap1.png" alt="PersistentHashMap ilustration 1" />
+</center>
+
+The colored nodes are <tt>BitmapIndexedNode</tt>s and have between 2 and 31 children (should they get a 32nd child, they become <tt>FullNode</tt>s). A naive implementation of <tt>BitmapIndexedNode</tt> might be the following: use an int variable, <tt>level</tt>, to denote the level that this node lives in, and allocate a full 32 element array of INode references for the children. To add a new child: lookup the index via the bit-block corresponding to the level, i.e. given a hashCode <tt>hash</tt> for the child, and given the level, call <tt>mask(hash, level)</tt> to get the index in range [0, 31]. But this strategy wastes a lot of memory: each node has a full 32 element array where most entries are simply <tt>null</tt>, i.e., if there are 4 children there are 28 null references which are just wasting space.
+
+The hard part is to only use as much space as is needed for each <tt>BitmapIndexedNode</tt>, i.e., if a <tt>BitmapIndexedNode</tt> has <tt>N</tt> children it maintains an array of size <tt>N</tt>. But then we can't use <tt>mask(hash,shift)</tt> as the index into the array since it returns a number in the range [0,31] and we need a number only in range [0, <tt>N</tt>). 
+
+<strong>bitpos</strong>
+So we need a function to map numbers in range [0, 31] to indexes in range [0, <tt>N</tt>). The function has to be fast constant time, since we are using it to find the child of a node from a hash code, which we will do at each level in the tree. The function is a composition of two functions: <tt>bitpos</tt> and <tt>index</tt>. Function <tt>bitpos</tt> maps numbers [0, 31] to powers of two, i.e., numbers that have a binary representation of the form:
+<center><tt>{10<sup>n</sup> | n &gt;= 0}</tt>.</center> 
+For example, <tt>bitpos(7)</tt> in binary is 10000000. We always look at <tt>bitpos(x)</tt> in binary form. Function <tt>index</tt> we return to shortly.
+
+<pre><tt><span class="keyword">static</span><span class="normal"> </span><span class="type">int</span><span class="normal"> </span><span class="function">bitpos</span><span class="symbol">(</span><span class="type">int</span><span class="normal"> hash</span><span class="symbol">,</span><span class="normal"> </span><span class="type">int</span><span class="normal"> shift</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal">    </span><span class="keyword">return</span><span class="normal"> </span><span class="number">1</span><span class="normal"> </span><span class="symbol">&lt;&lt;</span><span class="normal"> </span><span class="function">mask</span><span class="symbol">(</span><span class="normal">hash</span><span class="symbol">,</span><span class="normal"> shift</span><span class="symbol">);</span>
+<span class="cbracket">}</span></tt></pre>
+
+<strong>bitmap</strong>
+Each <tt>BitmapIndexedNode</tt> also maintains an int variable <tt>bitmap</tt> which we also look at in binary form. The <tt>bitmap</tt> tells us how many children this node has, and also what their indexes are in the child array. All this is encoded into one <tt>int</tt> variable! How? The bit-map has a binary representation, e.g.,
+<center><tt>00000000000000010000000010000101</tt></center>
+The number of children is the number of <tt>1</tt>'s in the binary representation. If the <tt>n</tt>th bit in <tt>bitmap</tt> is <tt>1</tt> (counting right-to-left, starting with position 0) then there is a child with index <tt>n</tt>. So to check if a child exists for a certain hash-code: first compute <tt>mask(hash,shift)</tt> to get the bit-block and number in range [0, 31]. Then compute <tt>bitpos</tt> of this. You then have a number of form <tt>10<sup>n</sup></tt>. Now match that with the <tt>bitmap</tt> to check if there is a <tt>1</tt> in the <tt>n</tt>'th position; this match is simply a bit-wise and, '&amp;', with <tt>bitpos</tt>. We'd better take an example.  
+
+Suppose we are at level 5, and looking up an element with hash-code 1258. Suppose also the bitmap-indexed node has four children, with <tt>bitmap</tt>
+<tt>bitmap =<sub>binary rep</sub> 00000000000000010000000010000101</tt>
+
+Now check if there is a child for hashCode 1258 at this level:
+
+<tt>mask(1258,5) = 7</tt> (i.e., binary <tt>00111</tt> as we saw before).
+
+<tt>bitpos(7) =<sub>binary rep</sub> 10000000</tt>
+
+<tt>00000000000000010000000010000101 &amp;</tt>
+<tt>00000000000000000000000010000000 = 1</tt>
+
+Which means that the child exists. Now what is its index? This is  where the <tt>index</tt> function comes into play...
+
+<strong>index</strong>
+This is the final piece of bit-trickery, I promise ;-) The index of a child is the number of <tt>1</tt>'s to the right of the child's <tt>bitpos</tt> in the bit map. In our example above, the index corresponding to hash code 1258 would be 2, since there are two <tt>1</tt>'s to the right of <tt>10000000</tt> in the <tt>bitmap</tt>.  Now the trick is that on many processors there is an efficient instruction called CTPOP which counts the number of ones in the bit representation of an integer (CTPOP is "count (bit) population"). Note that if we subtract 1 from the bitpos, <tt>10<sup>n</sup></tt>, we get <tt>01<sup>n</sup></tt>, then binary 'and' with the bit map gives us the same bit map, but where only the <tt>1</tt>'s to the right of <tt>bitpos</tt> are present. If we do a CTPOP on this, we get the index. Hence, 
+
+<pre><tt><span class="keyword">final</span><span class="normal"> </span><span class="type">int</span><span class="normal"> </span><span class="function">index</span><span class="symbol">(</span><span class="type">int</span><span class="normal"> bit</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal">    </span><span class="keyword">return</span><span class="normal"> Integer</span><span class="symbol">.</span><span class="function">bitCount</span><span class="symbol">(</span><span class="normal">bitmap </span><span class="symbol">&amp;</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">bit </span><span class="symbol">-</span><span class="normal"> </span><span class="number">1</span><span class="symbol">));</span>
+<span class="cbracket">}</span></tt></pre>
+ 
+
+<strong>To be continued...</strong>
+From this you should be able to understand how find works. In combines all this:
+
+<pre><tt><span class="keyword">final</span><span class="normal"> </span><span class="keyword">static</span><span class="normal"> </span><span class="keyword">class</span><span class="normal"> </span><span class="classname">BitmapIndexedNode</span><span class="normal"> </span><span class="keyword">implements</span><span class="normal"> INode</span><span class="cbracket">{</span>
+<span class="normal">    </span><span class="keyword">final</span><span class="normal"> </span><span class="type">int</span><span class="normal"> bitmap</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="keyword">final</span><span class="normal"> INode</span><span class="symbol">[]</span><span class="normal"> nodes</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="keyword">final</span><span class="normal"> </span><span class="type">int</span><span class="normal"> shift</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="comment">//some stuff left out</span>
+<span class="normal">    </span><span class="keyword">static</span><span class="normal"> </span><span class="type">int</span><span class="normal"> </span><span class="function">bitpos</span><span class="symbol">(</span><span class="type">int</span><span class="normal"> hash</span><span class="symbol">,</span><span class="normal"> </span><span class="type">int</span><span class="normal"> shift</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal">	</span><span class="keyword">return</span><span class="normal"> </span><span class="number">1</span><span class="normal"> </span><span class="symbol">&lt;&lt;</span><span class="normal"> </span><span class="function">mask</span><span class="symbol">(</span><span class="normal">hash</span><span class="symbol">,</span><span class="normal"> shift</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="cbracket">}</span>
+<span class="normal">    </span>
+<span class="normal">    </span><span class="keyword">final</span><span class="normal"> </span><span class="type">int</span><span class="normal"> </span><span class="function">index</span><span class="symbol">(</span><span class="type">int</span><span class="normal"> bit</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal">	</span><span class="keyword">return</span><span class="normal"> Integer</span><span class="symbol">.</span><span class="function">bitCount</span><span class="symbol">(</span><span class="normal">bitmap </span><span class="symbol">&amp;</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">bit </span><span class="symbol">-</span><span class="normal"> </span><span class="number">1</span><span class="symbol">));</span>
+<span class="normal">    </span><span class="cbracket">}</span>
+<span class="normal">    </span><span class="comment">//...some methods left out</span>
+<span class="normal">    </span>
+<span class="normal">   </span><span class="keyword">public</span><span class="normal"> LeafNode </span><span class="function">find</span><span class="symbol">(</span><span class="type">int</span><span class="normal"> hash</span><span class="symbol">,</span><span class="normal"> Object key</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal">       </span><span class="type">int</span><span class="normal"> bit </span><span class="symbol">=</span><span class="normal"> </span><span class="function">bitpos</span><span class="symbol">(</span><span class="normal">hash</span><span class="symbol">,</span><span class="normal"> shift</span><span class="symbol">);</span>
+<span class="normal">       </span><span class="keyword">if</span><span class="symbol">((</span><span class="normal">bitmap </span><span class="symbol">&amp;</span><span class="normal"> bit</span><span class="symbol">)</span><span class="normal"> </span><span class="symbol">!=</span><span class="normal"> </span><span class="number">0</span><span class="symbol">)</span>
+<span class="normal">	   </span><span class="cbracket">{</span>
+<span class="normal">	       </span><span class="keyword">return</span><span class="normal"> nodes</span><span class="symbol">[</span><span class="function">index</span><span class="symbol">(</span><span class="normal">bit</span><span class="symbol">)].</span><span class="function">find</span><span class="symbol">(</span><span class="normal">hash</span><span class="symbol">,</span><span class="normal"> key</span><span class="symbol">);</span>
+<span class="normal">	   </span><span class="cbracket">}</span>
+<span class="normal">       </span><span class="keyword">else</span>
+<span class="normal">	   </span><span class="keyword">return</span><span class="normal"> </span><span class="keyword">null</span><span class="symbol">;</span>
+<span class="normal">   </span><span class="cbracket">}</span>
+<span class="cbracket">}</span>
+</tt></pre>
+
+In part 2 we look at how assoc works...
+ 
+
+</div>
+
+
+          <div class="footer">
+            <div class="contact">
+              <p>
+                Your Name<br />
+                What You Are<br />
+                you@example.com
+              </p>
+            </div>
+            <div class="contact">
+              <p>
+                <a href="https://github.com/yourusername">github.com/yourusername</a><br />
+                <a href="https://twitter.com/yourusername">twitter.com/yourusername</a><br />
+              </p>
+            </div>
+          </div>
+        </div>
+
+    </body>
+</html>

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <title>clj-ds: Clojure's persistent data structures for Java</title>
+        <meta name="viewport" content="width=device-width">
+
+        <!-- syntax highlighting CSS -->
+        <link rel="stylesheet" href="/css/syntax.css">
+
+        <!-- Custom CSS -->
+        <link rel="stylesheet" href="/css/main.css">
+
+    </head>
+    <body>
+
+        <div class="site">
+          <div class="header">
+            <h1 class="title"><a href="/">Your New Jekyll Site</a></h1>
+            <a class="extra" href="/">home</a>
+          </div>
+
+          <h2>clj-ds: Clojure's persistent data structures for Java</h2>
+<p class="meta">11 Jun 2010</p>
+
+<div class="post">
+One of the appealing features of Clojure is the pervasive use of (efficient!) persistent data structures. (In previous posts I've shed some light on how <a href="http://blog.higher-order.net/2009/09/08/understanding-clojures-persistenthashmap-deftwice/">PersistentHashMap</a> and <a href="http://blog.higher-order.net/2009/02/01/understanding-clojures-persistentvector-implementation/">PersistentVector</a> are implemented, although some of that information is slightly dated now).
+
+There are many advantages to programming with persistent data structures (which implies immutability) but that isn't the topic of this post... Currently the Clojure data structures are implemented in Java, so in principle they should be usable also outside of Clojure, say from Java.  However, in practice it is inconvenient (see below). 
+
+I've created the project clj-ds to make Clojure's data structures available in a more practical form to other JVM languages than Clojure. The <a href="http://github.com/krukow/clj-ds/raw/master/README">README</a> file from the <a href="http://github.com/krukow/clj-ds">clj-ds GitHub project</a> explains the motivation:
+
+<strong>Advantages of clj-ds when constrained to working with Java</strong> (as opposed to just including clojure.jar)
+
+* Currently the Clojure data structures are implemented in Java. In the future,
+all of Clojure will be implemented in Clojure itself (known as "Clojure-in-Clojure").
+This has many advantages for Clojure, but when it happens the data structures will 
+probably be even more intertwined with the rest of the language, 
+and may be even more inconvenient to use in a Java context.
+
+The clj-ds project will maintain Java versions of the code, and where possible attempt
+to "port" improvements made in the Clojure versions back into clj-ds. Thus keeping maintained
+versions of the Java data structures. 
+
+* In the current Clojure version, calling certain methods on PersistentHashMap requires
+loading the entire Clojure runtime, including the bootstrap process. This takes about one second.
+This means that the first time one of these methods is called, a Java user will experience a
+slight delay (and a memory-usage increase). Further, many of the Clojure runtime 
+Java classes are not needed when only support for persistent data structures 
+is wanted (e.g., the compiler).
+
+* The clj-ds library is not dependent on the Clojure runtime nor does it run any
+Clojure bootstrap process, e.g., the classes that deal with compilation have been removed. 
+This results in a smaller library, and the mentioned delay does not occur.
+
+* Clojure is a dynamically typed language. Java is statically typed, and supports
+'generics' from version 5. A Java user would expect generics support from a Java
+data structure library, and the Clojure version doesn't have this. 
+clj-ds will support generics.
+
+* Finally, a slight improvement.  Certain of the Clojure data structure methods use Clojure's 'seq' abstraction. In the implementation of the Java 'iterator' pattern. It is possible, to make
+slightly more efficient iterators using a tailor made iterator. clj-ds does this.
+
+Code: <a href="http://github.com/krukow/clj-ds">http://github.com/krukow/clj-ds</a> 
+
+</div>
+
+
+          <div class="footer">
+            <div class="contact">
+              <p>
+                Your Name<br />
+                What You Are<br />
+                you@example.com
+              </p>
+            </div>
+            <div class="contact">
+              <p>
+                <a href="https://github.com/yourusername">github.com/yourusername</a><br />
+                <a href="https://twitter.com/yourusername">twitter.com/yourusername</a><br />
+              </p>
+            </div>
+          </div>
+        </div>
+
+    </body>
+</html>

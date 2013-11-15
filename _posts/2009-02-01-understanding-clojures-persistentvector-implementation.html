@@ -1,0 +1,125 @@
+---
+layout: post
+title: Understanding Clojure's PersistentVector implementation
+tags:
+- Clojure
+- persistent data structures
+- PersistentVector
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+---
+Update: <a href="http://blog.higher-order.net/2009/09/08/understanding-clojures-persistenthashmap-deftwice/">See also the description of PersistentHashMap</a>.
+
+One of the unique features of Clojure is that the <a href="http://clojure.org/data_structures">core data structures</a> are persistent (immutable with efficient structural sharing). This includes data structures Vector and Map that are mutable in most other languages. To be useful, operations on persistent data structures need to have performance characteristics that are similar to their mutating counterparts; e.g., the cost of random access on a persistent vector (put/get) needs to be comparable to random access to a mutable vector. Clojure manages to achieve this. Here we focus on understanding the Clojure implementation of Vector: <a href="http://code.google.com/p/clojure/source/browse/trunk/src/jvm/clojure/lang/PersistentVector.java">PersistentVector</a>.
+
+<strong>The basics.</strong> PersistentVector stores its elements in arrays, each array having at most size 32. One can think of the arrays as forming a wide balanced tree with each node having at most 32 children. Here is an example of what a size <span style="font-family: courier-new;">32<sup>2</sup> = 1024</span> PersistentVector tree might look like.
+
+<img src="http://blog.higher-order.net/files/clj/persistentvector1.png" alt="PersistentVector example" />
+
+The root of the tree is a pointer to a size-32 array ("blue") which has 32 children ("red"). The 32 red arrays each have 32 references to actual 1024 objects stored in the PersistentVector.
+
+<strong>Fetching elements (get).</strong> The key to understanding PersistentVector is to look at the binary representation of the numbers that index the vector. Java uses <a href="http://java.sun.com/docs/books/jls/second_edition/html/typesValues.doc.html#85587">32 bits for ints</a> <a href="http://en.wikipedia.org/wiki/Two%27s_complement">with signed two's-complement representation</a>. Examples:
+
+<img src="http://blog.higher-order.net/files/clj/bin-map1.png" alt="Binary representation examples" />
+
+One can think of this binary representation as divided into chunks of 5 bits, represented in colors here. These "chunks" are mapped to levels in the tree: for example, when fetching the element at 16, one looks at the the "blue" bits  (00000) -- this determines the index at the root child array (0); following that pointer, the "red" bits (10000) determines the index at the first level (16). When fetching index 49 the blue bits index to 1 and the red bits index to 17.
+
+In this case the depth of the tree is 2: the cost of lookup is following two pointers and some bit computation. In general the cost of lookup is proportional to the height of the tree, i.e., O(log<sub>32</sub> n) where n is the number of elements in the vector. In practice the height is no more than 7.
+
+Fetching the n'th element in PersistentVector is done with the <tt>nth</tt> method.  
+<pre><tt>
+<span class="keyword">public</span><span class="normal"> Object </span><span class="function">nth</span><span class="symbol">(</span><span class="type">int</span><span class="normal"> i</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal"> </span><span class="keyword">if</span><span class="symbol">(</span><span class="normal">i </span><span class="symbol">&gt;=</span><span class="normal"> </span><span class="number">0</span><span class="normal"> </span><span class="symbol">&amp;&amp;</span><span class="normal"> i </span><span class="symbol">&lt;</span><span class="normal"> cnt</span><span class="symbol">)</span>
+<span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal"> </span><span class="keyword"> if</span><span class="symbol">(</span><span class="normal">i </span><span class="symbol">&gt;=</span><span class="normal"> </span><span class="function">tailoff</span><span class="symbol">())</span>
+<span class="normal"> </span><span class="keyword">  return</span><span class="normal"> tail</span><span class="symbol">[</span><span class="normal">i </span><span class="symbol">&amp;</span><span class="normal"> </span><span class="number">0x01f</span><span class="symbol">];</span>
+<span class="normal"> Object</span><span class="symbol">[]</span><span class="normal"> arr </span><span class="symbol">=</span><span class="normal"> root</span><span class="symbol">;</span>
+<span class="normal"> </span><span class="keyword">for</span><span class="symbol">(</span><span class="type">int</span><span class="normal"> level </span><span class="symbol">=</span><span class="normal"> shift</span><span class="symbol">;</span><span class="normal"> level </span><span class="symbol">&gt;</span><span class="normal"> </span><span class="number">0</span><span class="symbol">;</span><span class="normal"> level </span><span class="symbol">-=</span><span class="normal"> </span><span class="number">5</span><span class="symbol">)</span>
+<span class="normal">   arr </span><span class="symbol">=</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">Object</span><span class="symbol">[])</span><span class="normal"> arr</span><span class="symbol">[(</span><span class="normal">i </span><span class="symbol">&gt;&gt;&gt;</span><span class="normal"> level</span><span class="symbol">)</span><span class="normal"> </span><span class="symbol">&amp;</span><span class="normal"> </span><span class="number">0x01f</span><span class="symbol">];</span>
+<span class="normal"> </span><span class="keyword">return</span><span class="normal"> arr</span><span class="symbol">[</span><span class="normal">i </span><span class="symbol">&amp;</span><span class="normal"> </span><span class="number">0x01f</span><span class="symbol">];</span>
+<span class="normal"> </span><span class="cbracket">}</span>
+<span class="normal"> </span><span class="keyword">throw</span><span class="normal"> </span><span class="keyword">new</span><span class="normal"> </span><span class="function">IndexOutOfBoundsException</span><span class="symbol">();</span>
+<span class="cbracket">}</span>
+</tt></pre>
+Ignoring the 'tail'-part, the code uses an instance variable: <tt>shift</tt> which is determined by the height of the tree: <tt>shift = 5*(h+1)</tt> where <tt>h</tt> is the height of the tree (defined here as 0 for an empty tree). Another way to think of the <tt>shift</tt> variable is that it determines how many bits to right-shift the bit representation of an integer to move for a certain block (color) of interest to be the rightmost block. For example shifting <tt>0000110001 (49)</tt> with 5 gives <tt>00000000001</tt> which is exactly the "blue" index. 
+
+In general <tt>shift</tt> determines the right-shift needed to access the root index, i.e., for the block of bits that index into the root array to become the right-most block. The tree is searched from the most significant blocks (root, and it's children) towards the least significant blocks (the "high levels" or leaves). Notice that for any integer <tt>i</tt>, if we mask <tt>i</tt>'s bit representation with <tt>00...011111</tt> we get the five right-most bits of <tt>i</tt>. The expression <tt>i & 0x1f</tt> does this as <tt>0x1f</tt> is <tt>011111</tt>.
+
+<strong>Insertion (put).</strong> 
+Insertion is more tricky. Here we consider only the 'cons' method which appends an element to the end of the vector. The method which replaces the element at an index is easy once 'cons' and 'nth' is understood. Of course, since PersistentVector is immutable 'cons' really returns a new PersistentVector object which is equal to the old one except that it has the new element at the end. With cons, the tree grows only in a balanced way: elements are added at the deepest level at the rightmost array. If the PersistentVector contains a number of elements which is a power of 32 (e.g., 1024 = 32<sup>2</sup>), the height of the tree is increased by one and there is now "room" for 32 times more elements. In our example from before, suppose we add an element at the end of the vector. We obtain this tree:
+
+<img src="http://blog.higher-order.net/files/clj/persistentvector2.png" alt="Consing persistent vector" />
+
+Notice that the entire old PersistentVector is shared with the new PersistentVector! No copying is involved in this particular case.
+
+<strong>The tail...</strong> Actually (to be precise) this happens not exactly at powers of 32 but slightly delayed: at the insertion of the 33rd element after a power of 32. E.g., 1024 + 33 = 1057. As you can see from the figure above, an entire size-32 array is inserted at the lower right-most position (instead of a size 1 array with the new element). This is an optimization. There is a special instance variable <tt>tail</tt> of size at most 32. The <tt>tail</tt> array is a sort of buffer where elements are appended until a full size-32 array can be placed in the tree. This makes "batch" insertion faster: suppose you creating a new PersistentVector from another collection type, e.g., a LinkedList. Since PersistentVector is immutable this is done by starting with the empty vector and then repeatedly 'cons'ing elements from the LinkedList to obtain a new vector. E.g., 
+
+<pre><tt>
+<span class="keyword">static</span><span class="normal"> </span><span class="keyword">public</span><span class="normal"> PersistentVector </span><span class="function">create</span><span class="symbol">(</span><span class="normal">List items</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal">	PersistentVector ret </span><span class="symbol">=</span><span class="normal"> EMPTY</span><span class="symbol">;</span>
+<span class="normal">	</span><span class="keyword">for</span><span class="symbol">(</span><span class="normal">Object item </span><span class="symbol">:</span><span class="normal"> items</span><span class="symbol">)</span>
+<span class="normal">		ret </span><span class="symbol">=</span><span class="normal"> ret</span><span class="symbol">.</span><span class="function">cons</span><span class="symbol">(</span><span class="normal">item</span><span class="symbol">);</span>
+<span class="normal">	</span><span class="keyword">return</span><span class="normal"> ret</span><span class="symbol">;</span>
+<span class="cbracket">}</span>
+</tt></pre>  
+
+This also explains the 'tail' code in the <tt>nth</tt> method above: If we a getting an element which happens to be located in the <tt>tail</tt> buffer at present (there can be from 0 to 32 elements with this property), we simply access it directly. This is done by looking at the 5 least significant bits of the index.
+ 
+While the code for 'cons' is intricate, the idea is reasonably simple as illustrated by the above figure. I will end this post with the actual code. If anyone is interested, I can go into the details of the implementation.
+<pre><tt>
+<span class="keyword">public</span><span class="normal"> PersistentVector </span><span class="function">cons</span><span class="symbol">(</span><span class="normal">Object val</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal">	</span><span class="keyword">if</span><span class="symbol">(</span><span class="normal">tail</span><span class="symbol">.</span><span class="normal">length </span><span class="symbol">&lt;</span><span class="normal"> </span><span class="number">32</span><span class="symbol">)</span>
+<span class="normal">		</span><span class="cbracket">{</span>
+<span class="normal">		Object</span><span class="symbol">[]</span><span class="normal"> newTail </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">new</span><span class="normal"> Object</span><span class="symbol">[</span><span class="normal">tail</span><span class="symbol">.</span><span class="normal">length </span><span class="symbol">+</span><span class="normal"> </span><span class="number">1</span><span class="symbol">];</span>
+<span class="normal">		System</span><span class="symbol">.</span><span class="function">arraycopy</span><span class="symbol">(</span><span class="normal">tail</span><span class="symbol">,</span><span class="normal"> </span><span class="number">0</span><span class="symbol">,</span><span class="normal"> newTail</span><span class="symbol">,</span><span class="normal"> </span><span class="number">0</span><span class="symbol">,</span><span class="normal"> tail</span><span class="symbol">.</span><span class="normal">length</span><span class="symbol">);</span>
+<span class="normal">		newTail</span><span class="symbol">[</span><span class="normal">tail</span><span class="symbol">.</span><span class="normal">length</span><span class="symbol">]</span><span class="normal"> </span><span class="symbol">=</span><span class="normal"> val</span><span class="symbol">;</span>
+<span class="normal">		</span><span class="keyword">return</span><span class="normal"> </span><span class="keyword">new</span><span class="normal"> </span><span class="function">PersistentVector</span><span class="symbol">(</span><span class="function">meta</span><span class="symbol">(),</span><span class="normal"> cnt </span><span class="symbol">+</span><span class="normal"> </span><span class="number">1</span><span class="symbol">,</span><span class="normal"> shift</span><span class="symbol">,</span><span class="normal"> root</span><span class="symbol">,</span><span class="normal"> newTail</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="cbracket">}</span>
+<span class="normal">	Box expansion </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">new</span><span class="normal"> </span><span class="function">Box</span><span class="symbol">(</span><span class="keyword">null</span><span class="symbol">);</span>
+<span class="normal">	Object</span><span class="symbol">[]</span><span class="normal"> newroot </span><span class="symbol">=</span><span class="normal"> </span><span class="function">pushTail</span><span class="symbol">(</span><span class="normal">shift </span><span class="symbol">-</span><span class="normal"> </span><span class="number">5</span><span class="symbol">,</span><span class="normal"> root</span><span class="symbol">,</span><span class="normal"> tail</span><span class="symbol">,</span><span class="normal"> expansion</span><span class="symbol">);</span>
+<span class="normal">	</span><span class="type">int</span><span class="normal"> newshift </span><span class="symbol">=</span><span class="normal"> shift</span><span class="symbol">;</span>
+<span class="normal">	</span><span class="keyword">if</span><span class="symbol">(</span><span class="normal">expansion</span><span class="symbol">.</span><span class="normal">val </span><span class="symbol">!=</span><span class="normal"> </span><span class="keyword">null</span><span class="symbol">)</span>
+<span class="normal">		</span><span class="cbracket">{</span>
+<span class="normal">		newroot </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">new</span><span class="normal"> Object</span><span class="symbol">[]</span><span class="cbracket">{</span><span class="normal">newroot</span><span class="symbol">,</span><span class="normal"> expansion</span><span class="symbol">.</span><span class="normal">val</span><span class="cbracket">}</span><span class="symbol">;</span>
+<span class="normal">		newshift </span><span class="symbol">+=</span><span class="normal"> </span><span class="number">5</span><span class="symbol">;</span>
+<span class="normal">		</span><span class="cbracket">}</span>
+<span class="normal">	</span><span class="keyword">return</span><span class="normal"> </span><span class="keyword">new</span><span class="normal"> </span><span class="function">PersistentVector</span><span class="symbol">(</span><span class="function">meta</span><span class="symbol">(),</span><span class="normal"> cnt </span><span class="symbol">+</span><span class="normal"> </span><span class="number">1</span><span class="symbol">,</span><span class="normal"> newshift</span><span class="symbol">,</span><span class="normal"> newroot</span><span class="symbol">,</span><span class="normal"> </span><span class="keyword">new</span><span class="normal"> Object</span><span class="symbol">[]</span><span class="cbracket">{</span><span class="normal">val</span><span class="cbracket">}</span><span class="symbol">);</span>
+<span class="cbracket">}</span>
+</tt></pre>
+
+<pre><tt>
+<span class="keyword">private</span><span class="normal"> Object</span><span class="symbol">[]</span><span class="normal"> </span><span class="function">pushTail</span><span class="symbol">(</span><span class="type">int</span><span class="normal"> level</span><span class="symbol">,</span><span class="normal"> Object</span><span class="symbol">[]</span><span class="normal"> arr</span><span class="symbol">,</span><span class="normal"> Object</span><span class="symbol">[]</span><span class="normal"> tailNode</span><span class="symbol">,</span><span class="normal"> Box expansion</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal">	Object newchild</span><span class="symbol">;</span>
+<span class="normal">	</span><span class="keyword">if</span><span class="symbol">(</span><span class="normal">level </span><span class="symbol">==</span><span class="normal"> </span><span class="number">0</span><span class="symbol">)</span>
+<span class="normal">		</span><span class="cbracket">{</span>
+<span class="normal">		newchild </span><span class="symbol">=</span><span class="normal"> tailNode</span><span class="symbol">;</span>
+<span class="normal">		</span><span class="cbracket">}</span>
+<span class="normal">	</span><span class="keyword">else</span>
+<span class="normal">		</span><span class="cbracket">{</span>
+<span class="normal">		newchild </span><span class="symbol">=</span><span class="normal"> </span><span class="function">pushTail</span><span class="symbol">(</span><span class="normal">level </span><span class="symbol">-</span><span class="normal"> </span><span class="number">5</span><span class="symbol">,</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">Object</span><span class="symbol">[])</span><span class="normal"> arr</span><span class="symbol">[</span><span class="normal">arr</span><span class="symbol">.</span><span class="normal">length </span><span class="symbol">-</span><span class="normal"> </span><span class="number">1</span><span class="symbol">],</span><span class="normal"> tailNode</span><span class="symbol">,</span><span class="normal"> expansion</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="keyword">if</span><span class="symbol">(</span><span class="normal">expansion</span><span class="symbol">.</span><span class="normal">val </span><span class="symbol">==</span><span class="normal"> </span><span class="keyword">null</span><span class="symbol">)</span>
+<span class="normal">			</span><span class="cbracket">{</span>
+<span class="normal">			Object</span><span class="symbol">[]</span><span class="normal"> ret </span><span class="symbol">=</span><span class="normal"> arr</span><span class="symbol">.</span><span class="function">clone</span><span class="symbol">();</span>
+<span class="normal">			ret</span><span class="symbol">[</span><span class="normal">arr</span><span class="symbol">.</span><span class="normal">length </span><span class="symbol">-</span><span class="normal"> </span><span class="number">1</span><span class="symbol">]</span><span class="normal"> </span><span class="symbol">=</span><span class="normal"> newchild</span><span class="symbol">;</span>
+<span class="normal">			</span><span class="keyword">return</span><span class="normal"> ret</span><span class="symbol">;</span>
+<span class="normal">			</span><span class="cbracket">}</span>
+<span class="normal">		</span><span class="keyword">else</span>
+<span class="normal">			newchild </span><span class="symbol">=</span><span class="normal"> expansion</span><span class="symbol">.</span><span class="normal">val</span><span class="symbol">;</span>
+<span class="normal">		</span><span class="cbracket">}</span>
+<span class="normal">	</span><span class="comment">//expansion</span>
+<span class="normal">	</span><span class="keyword">if</span><span class="symbol">(</span><span class="normal">arr</span><span class="symbol">.</span><span class="normal">length </span><span class="symbol">==</span><span class="normal"> </span><span class="number">32</span><span class="symbol">)</span>
+<span class="normal">		</span><span class="cbracket">{</span>
+<span class="normal">		expansion</span><span class="symbol">.</span><span class="normal">val </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">new</span><span class="normal"> Object</span><span class="symbol">[]</span><span class="cbracket">{</span><span class="normal">newchild</span><span class="cbracket">}</span><span class="symbol">;</span>
+<span class="normal">		</span><span class="keyword">return</span><span class="normal"> arr</span><span class="symbol">;</span>
+<span class="normal">		</span><span class="cbracket">}</span>
+<span class="normal">	Object</span><span class="symbol">[]</span><span class="normal"> ret </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">new</span><span class="normal"> Object</span><span class="symbol">[</span><span class="normal">arr</span><span class="symbol">.</span><span class="normal">length </span><span class="symbol">+</span><span class="normal"> </span><span class="number">1</span><span class="symbol">];</span>
+<span class="normal">	System</span><span class="symbol">.</span><span class="function">arraycopy</span><span class="symbol">(</span><span class="normal">arr</span><span class="symbol">,</span><span class="normal"> </span><span class="number">0</span><span class="symbol">,</span><span class="normal"> ret</span><span class="symbol">,</span><span class="normal"> </span><span class="number">0</span><span class="symbol">,</span><span class="normal"> arr</span><span class="symbol">.</span><span class="normal">length</span><span class="symbol">);</span>
+<span class="normal">	ret</span><span class="symbol">[</span><span class="normal">arr</span><span class="symbol">.</span><span class="normal">length</span><span class="symbol">]</span><span class="normal"> </span><span class="symbol">=</span><span class="normal"> newchild</span><span class="symbol">;</span>
+<span class="normal">	expansion</span><span class="symbol">.</span><span class="normal">val </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">null</span><span class="symbol">;</span>
+<span class="normal">	</span><span class="keyword">return</span><span class="normal"> ret</span><span class="symbol">;</span>
+<span class="cbracket">}</span>
+</tt></pre>
+ 

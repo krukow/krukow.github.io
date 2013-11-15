@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <title>Jeene: An automatic partial evaluator for JavaScript</title>
+        <meta name="viewport" content="width=device-width">
+
+        <!-- syntax highlighting CSS -->
+        <link rel="stylesheet" href="/css/syntax.css">
+
+        <!-- Custom CSS -->
+        <link rel="stylesheet" href="/css/main.css">
+
+    </head>
+    <body>
+
+        <div class="site">
+          <div class="header">
+            <h1 class="title"><a href="/">Your New Jekyll Site</a></h1>
+            <a class="extra" href="/">home</a>
+          </div>
+
+          <h2>Jeene: An automatic partial evaluator for JavaScript</h2>
+<p class="meta">14 Sep 2008</p>
+
+<div class="post">
+The purpose of this posting is to show that is is possible to create an online partial evaluator for JavaScript, written also in JavaScript. As far as I know, this has been not been done before. This post is the first in a series describing the inner workings of <a href="http://code.google.com/p/jeene/">Jeene</a>.
+
+<strong>A what?</strong> A partial evaluator (or program specializer) is a program which takes two inputs: another program and an environment mapping variables to values; it outputs a specialized (i.e., more efficient) version of the input program with respect to the environment. One can think of a partial evaluator as a mix between an interpreter and a compiler: it interprets the static parts of the program and emits code for the dynamic parts. 
+
+For a simple example of code specialization, consider the following function for creating a string corresponding to an HTML tag:
+<pre><tt><span class="keyword">var</span><span class="normal"> mk_tag </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">tag_name</span><span class="symbol">,</span><span class="normal">clazz</span><span class="symbol">,</span><span class="normal">contents</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">   </span><span class="keyword">return</span><span class="normal"> </span><span class="string">'&lt;'</span><span class="symbol">+</span><span class="normal">tag_name</span><span class="symbol">+</span><span class="string">' class="'</span><span class="symbol">+</span><span class="normal">clazz</span><span class="symbol">+</span><span class="string">'"&gt;'</span><span class="symbol">+</span><span class="normal">contents</span><span class="symbol">+</span><span class="string">'&lt;/'</span><span class="symbol">+</span><span class="normal">tag_name</span><span class="symbol">+</span><span class="string">'&gt;'</span><span class="symbol">;</span>
+<span class="cbracket">}</span><span class="symbol">;</span>
+</tt></pre>
+If we are only interested in making 'div' tags with a class of 'green' then a more efficient version would be:
+<pre><tt><span class="keyword">var</span><span class="normal"> mk_div_green </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">contents</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">   </span><span class="keyword">return</span><span class="normal"> </span><span class="string">'&lt;div class="green"&gt;'</span><span class="symbol">+</span><span class="normal">contents</span><span class="symbol">+</span><span class="string">'&lt;/div&gt;'</span><span class="symbol">;</span>
+<span class="cbracket">}</span><span class="symbol">;</span>
+</tt></pre>
+since it would require fewer string concatenations per call. We can think of 'mk_div_green' as a version of 'mk_tag' which is specialized for writing 'div' tags with a class of 'green'. A partial evaluator for JavaScript could automatically derive the 'mk_div_green' function from the 'mk_tag' function.
+
+
+<p>This is exactly what we can do with the evaluator in this posting.</p>
+<pre><tt><span class="comment">//This code actually works ;-)</span>
+<span class="normal">Function</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">.</span><span class="normal">specialize </span><span class="symbol">=</span><span class="normal"> net</span><span class="symbol">.</span><span class="normal">higherorder</span><span class="symbol">.</span><span class="normal">jeene</span><span class="symbol">.</span><span class="normal">Jeene</span><span class="symbol">.</span><span class="function">make</span><span class="symbol">();</span>
+
+<span class="keyword">var</span><span class="normal"> mk_tag </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">tag</span><span class="symbol">,</span><span class="normal">clz</span><span class="symbol">,</span><span class="normal">cont</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">   </span><span class="keyword">return</span><span class="normal"> </span><span class="string">"&lt;"</span><span class="symbol">+</span><span class="normal">tag</span><span class="symbol">+</span><span class="string">" class='"</span><span class="symbol">+</span><span class="normal">clz</span><span class="symbol">+</span><span class="string">"'&gt;"</span><span class="symbol">+</span><span class="normal">cont</span><span class="symbol">+</span><span class="string">"&lt;/"</span><span class="symbol">+</span><span class="normal">tag</span><span class="symbol">+</span><span class="string">"&gt;"</span><span class="symbol">;</span>
+<span class="cbracket">}</span><span class="symbol">;</span>
+
+
+<span class="keyword">var</span><span class="normal"> mk_div_green </span><span class="symbol">=</span><span class="normal"> mk_tag</span><span class="symbol">.</span><span class="function">specialize</span><span class="symbol">(</span><span class="cbracket">{</span><span class="normal">tag</span><span class="symbol">:</span><span class="string">'div'</span><span class="symbol">,</span><span class="normal"> clz</span><span class="symbol">:</span><span class="normal"> </span><span class="string">'green'</span><span class="cbracket">}</span><span class="symbol">);</span>
+
+
+
+<span class="function">mk_div_green</span><span class="symbol">(</span><span class="string">"Pratt rocks!"</span><span class="symbol">);</span>
+<span class="comment">//result: &lt;div class='green'&gt;Pratt rocks!&lt;/div&gt;</span>
+
+
+<span class="normal">mk_div_green</span><span class="symbol">.</span><span class="normal">toSource </span><span class="symbol">?</span><span class="normal"> mk_div_green</span><span class="symbol">.</span><span class="function">toSource</span><span class="symbol">()</span><span class="normal"> </span><span class="symbol">:</span><span class="normal"> mk_div_green</span><span class="symbol">.</span><span class="function">toString</span><span class="symbol">();</span>
+<span class="comment">//result:</span>
+<span class="comment">//(function (cont) {return ("&lt;div class='green'&gt;" + cont) + "&lt;/div&gt;";})</span></tt></pre>
+This last line, shows that the output function is much more efficient than what is created by general JavaScript curriers <a href="http://ajaxian.com/archives/currying-in-javascript">which have been seen before</a>: these functions merely wait evaluating the function until all parameters are supplied; instead, a partial evaluator will create specialized function taking advantage of the information given.
+
+The first goal is for the partial evaluator to process any function written in an extension of "simplified JavaScript" (a subset of full JavaScript corresponding to what Crockford calls the "<a href="http://www.amazon.com/JavaScript-Good-Parts-Douglas-Crockford/dp/0596517742">good parts</a>"). This partial evaluator will have a number of useful features: it
+<ul>
+	<li>can easily be extended to full JavaScript;</li>
+        <li> is written in simplified JavaScript (think <a href="http://en.wikipedia.org/wiki/Partial_evaluation">Futamura projections</a>);</li>
+	<li> is a fast extension of Douglas <a href="http://javascript.crockford.com/tdop/tdop.html">Crockford's Pratt parser</a>;</li>
+	<li> because functions implement the toString method, it can be run on dynamically generated functions (e.g., a specialized function can be further specialized);</li>
+	<li> can be embedded in any full JavaScript program as long as it is only used to specialize functions which are syntactically in simplified JavaScript;</li>
+</ul>
+
+I have started a new open source project, <a href="http://code.google.com/p/jeene/">Jeene</a>, which aims to create an efficient partial evaluator for full JavaScript that works in any ECMAScript 3 compliant implementation (e.g., all major browsers, Rhino, TraceMonkey, V8 etc). Right now the project is at a very early stage; a proof of concept, for example it cannot specialize itself. Let me know if you are interested in contributing: I will use a 1 patch threshold like Rubinius: if you submit one patch which is accepted, you get commit rights.
+
+Stay tuned <a href="http://blog.higher-order.net">here</a> for more information about how Jeene is designed and implemented.
+ 
+
+</div>
+
+
+          <div class="footer">
+            <div class="contact">
+              <p>
+                Your Name<br />
+                What You Are<br />
+                you@example.com
+              </p>
+            </div>
+            <div class="contact">
+              <p>
+                <a href="https://github.com/yourusername">github.com/yourusername</a><br />
+                <a href="https://twitter.com/yourusername">twitter.com/yourusername</a><br />
+              </p>
+            </div>
+          </div>
+        </div>
+
+    </body>
+</html>

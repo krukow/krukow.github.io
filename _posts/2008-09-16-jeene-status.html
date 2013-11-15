@@ -1,0 +1,34 @@
+---
+layout: post
+title: 'Jeene: Status'
+tags:
+- General
+- JavaScript
+- Jeene
+- partial evaluation
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+---
+I am happy that <a href="http://blog.higher-order.net/2008/09/14/jeene/">Jeene</a> was <a href="http://ajaxian.com/archives/jeene-automatic-partial-evaluation-for-javascript-in-javascript">mentioned on Ajaxian</a> today. This is good ;-) it means that the project is more likely to attract potential contributors which is nice since there is quite some work yet to be done.  
+
+I thought, I would provide a status update on Jeene and a "backlog" of work that needs to be done.
+
+<strong>What is working:</strong>
+<ul>
+	<li>Partial evaluation of simple operations: '+', '-', '&&' and '||'</li>
+        <li>code generation for 'function' expressions and 'return' statements</li>
+</ul>
+This means that we can run a number of simple examples. For a quick and dirty performance test checkout: <a href="http://code.google.com/p/jeene/source/browse/trunk/examples/performance_simple1.html">performance_simple1</a>
+
+This is all fine, the basic design is in place. Now it is just a matter of "getting it done" to implement other operators. However, there are some constructs that are more difficult:
+<strong>What I will be working on next</strong>
+<ul>
+	<li>Assignment. Since an assignment changes the static/dynamic status of variables, this is more advanced than e.g. '+' which doesn't have side effects. For example if 'x' is a static variable and 'y' is dynamic, then 'y = x;' should cause 'y' to be static from that program point. </li>
+        <li>Handling of function calls. For now, I will simply replace a function call with a function call where we replace static expressions in the arguments with their values. Later I will consider 'unrolling'/'inlining' of function calls.</li>
+</ul>
+
+
+As always, I welcome anyone interested in contributing. I will run a rule: 1-patch approved = commit rights.  

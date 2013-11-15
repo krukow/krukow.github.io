@@ -1,0 +1,44 @@
+---
+layout: post
+title: 'Stomple RC1: Combining WebSockets and Reliable Messaging'
+tags:
+- General
+status: draft
+type: post
+published: false
+meta:
+  _edit_last: '1'
+---
+I've finished <a href="http://github.com/krukow/stomple">Release Candidate 1 for Stomple</a>, my JavaScript <a href="http://stomp.codehaus.org/Protocol">Stomp</a> library which uses WebSockets to access compatible Stomp Message Brokers (which includes JMS providers via <a href="http://stomp.codehaus.org/StompConnect">StompConnect</a>). Stomple is heavily inspired by Jeff Mesnil's great <a href="http://jmesnil.net/stomp-websocket/doc/">stomp-websocket</a>, but aims to be feature complete and to provide a high-level API which is more customizable, robust and easy to use. 
+
+<strong>What</strong>? From the <a href="http://stomp.codehaus.org/Home">Stomp website</a>: <blockquote>Stomp provides an interoperable wire format so that any of the available Stomp Clients can communicate with any Stomp Message Broker to provide easy and widespread messaging interop among languages, platforms and brokers.</blockquote>
+As mentioned, this includes JMS. Stomple is a JavaScript library which enables using browsers that support WebSockets as messaging clients, e.g., subscribing to an JMS topic in a JavaScript program running inside Chrome. 
+
+This allows the <em>server</em> to push updates to the browser (as opposed to the usual HTTP request-response paradigm). For a simple example, see the <a href="http://screencast.com/t/NzdmMGJj">screen cast of the "transactional chat example"</a> where chat messages are pushed from the server to participating clients.
+ 
+<strong>Why</strong> release stomple when there is already stomp-websocket? First of all, Jeff did an excellent job with stomp-websocket. However, I wanted additional features and I prefer an API that uses configuration-objects (i.e. most functions take a single object literal parameter which names the functions arguments). For example to create a Stomple client and to configure it to use destination 'jms.topic.chat' as default use:
+<code><pre><tt>
+var client = Stomple.create_client({
+    url : "ws://localhost:61614/stomp",
+    destination : "jms.topic.chat",
+    login : "guest",
+    passcode : "guest"
+});
+</tt></pre></code>
+A different example would be subscribe:
+<code><pre><tt>
+client.subscribe({
+    success: function(frame) {//called if subscribe succeeds within timeout-period
+        //subscribe succeeded... do something
+    },
+    failure: function(spec) {//called if subscribe fails or times out
+        console.log(spec.reason);
+    },
+    handler: function(msg) {//called when a message arrived ('this' is scope - see below) 
+        this.received = msg.body;//"this" is "someObject"
+    },
+    scope: someObject
+});
+</tt></pre></code>
+Note by the way that if <tt>client.autoConnect</tt> is true (which it is by default), then you don't have to explicitly connect. Stomple will automatically connect upon your first action. The subscribe function supports an optional destination parameter in-case a default wasn't supplied when the client object was created (or in case you want to subscribe to a non-default destination). 
+<strong>How</strong>? 

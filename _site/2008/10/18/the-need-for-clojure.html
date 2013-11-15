@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <title>The need for Clojure</title>
+        <meta name="viewport" content="width=device-width">
+
+        <!-- syntax highlighting CSS -->
+        <link rel="stylesheet" href="/css/syntax.css">
+
+        <!-- Custom CSS -->
+        <link rel="stylesheet" href="/css/main.css">
+
+    </head>
+    <body>
+
+        <div class="site">
+          <div class="header">
+            <h1 class="title"><a href="/">Your New Jekyll Site</a></h1>
+            <a class="extra" href="/">home</a>
+          </div>
+
+          <h2>The need for Clojure</h2>
+<p class="meta">18 Oct 2008</p>
+
+<div class="post">
+<blockquote>It is a need usually provoked after experiencing an emotional conclusion to a difficult life event, such as the breakdown of a close interpersonal relationship [or an unreliable concurrent program, editor] or the death of loved one [or an old familiar programming language, editor]... A person with a high need for closure prefers order and predictability and is decisive [...]</blockquote>
+<span style="float:right; ">[selected, edited parts from <a href="http://en.wikipedia.org/wiki/Closure_(psychology)">Wikipedia</a> on the need for closure ;-)]</span>
+<div style="clear:both">I've just decided to put all my pet projects and programming languages aside to dedicate myself to learning one single language, with the ambition to eventually master it. That language is <a href="http://clojure.org">Clojure</a>.
+
+To force myself to reflect on my learning process and to help the community to the best of my ability, I will write a number of blog postings about my experiences with Clojure. There is already a lot of truly outstanding quality information about the theory and ideas behind Clojure around the net (mostly this excellent quality is due to fact the the creator of Clojure, Rich Hickey, is a great speaker). However, to my knowledge, there is less information about how to actually program Clojure. So this series of postings will explore programming Clojure from a beginners perspective -- hopefully others may learn from my mistakes and insights.
+
+In other words: This series is about Beginning Clojure in Practice.
+
+<em>Update: Sat. Oct. 18, 2008: A few points about Clojure, and links to better information</em>.
+
+<strong>What is Clojure?</strong>
+Clojure is a relatively young language (<a href="http://groups.google.com/group/clojure/browse_thread/thread/d8203f1f9f026e8d/16fec21eb1fff8aa#16fec21eb1fff8aa">recently</a>, it's 1-year birthday was celebrated). As I am beginning clojure, I am certainly not the best source of information; however, I would like to share <em>my personal top 5 reasons</em> why Clojure stands out in the ocean of programming languages that seems to be growing only faster by the day. If you want to know more about clojure, I strongly encourage reading <em>the entire</em> <a href="http://clojure.org">homepage</a> and watching <a href="http://clojure.blip.tv/posts?view=archive&amp;nsfw=dc">the videos on blip.tv</a>.
+
+<strong>Why Clojure?</strong>
+<ul>
+	<li>Clojure is <a href="http://www.paulgraham.com/avg.html">a LISP</a> (perhaps it is more precise to say that it is strongly inspired by LISP, in some sense it is more general). Most importantly this means the full power of macros.</li>
+	<li>It is compiled to the JVM, and designed to embrace it. This means making use of a powerful infrastructure, e.g., garbage collection and a powerful, mature, optimizing JIT. Rich Hickey makes a good point on distinguishing languages that 'live on' the JVM (like JRuby or Jython) and languages that are designed <em>for</em> the JVM like (Groovy and Scala). Since JRuby and Jython are 'ports' of a language specified elsewhere, they have to fit on the JVM for better or worse (for example no call/cc in JRuby). In contrast, Clojure is designed for the JVM: Rich calls this 'embracing it.'</li>
+	<li>Java interoperability. Clojure is designed to inter-operate with Java; there is language-level support [syntax, even ;-)] for interacting with Java (no wrappers). This means that the enormous number of already existing Java libraries can be used from Clojure. This solves the 'library problem' (see below).</li>
+	<li>Clojure has an opinion about how to do in-process concurrency (my favorite point): First, immutability is good; it is the default, and all Clojure data structures are immutable. Yet, Clojure accepts that sometimes mutability is needed and even desired, and support for a mutability is provided in the form of Refs and Agents. These are programming language constructs that allow for mutability, but <em>with a concurrency semantics</em>. Refs come with a software transactional memory system, and agents allow an in-process asynchronous programming model (similar to, but not equal Erlang's actors).  Go and read Rich's short essay: <a href="http://clojure.org/state">On state and identity</a>; once you get a feel for the language, read it again ;-). <strong>Persistent data structures</strong>, are an amazing and important part of Clojure's concurrency model. This is what makes immutability viable in Clojure. An 'update' operation on a persistent data structure doesn't actually change the data structure (it is immutable), but returns a new data structure (also immutable) representing the updated structure. Now, one might think this entails copying the entire structure; amazingly via structural sharing this is not the case. Clojures data structures (e.g., a hash map) are immutable and persistent yet retain the performance guarantees of their mutable counter-parts (Rich claims performance from faster-than-Java to up-to at most 4x Java speed). More on this in a later posting.</li>
+<li>Dynamic and mostly functional; this speaks for itself.</li>
+</ul>
+
+I am really looking forward to exploring this language in depth and in practice, and to sharing what I find with anyone actually reading this blog ;-)
+
+Finally, just as a thought: Eric Kidd wrote about <a href="http://www.randomhacks.net/articles/2005/12/03/why-ruby-is-an-acceptable-lisp">choosing between Ruby and LISP</a>.
+
+<blockquote>So if LISP is still more powerful than Ruby, why not use LISP? The typical objections to programming in LISP are:
+<ul>
+	<li>There aren’t enough libraries.</li>
+	<li>We can’t hire LISP programmers.</li>
+	<li>LISP has gone nowhere in the past 20 years.</li>
+</ul>
+</blockquote>
+My reply to this would be: Well, with Clojure, LISP is definitely going somewhere; only the second objection applies (and perhaps with time this will no longer be the case, who knows).</div> 
+
+</div>
+
+
+          <div class="footer">
+            <div class="contact">
+              <p>
+                Your Name<br />
+                What You Are<br />
+                you@example.com
+              </p>
+            </div>
+            <div class="contact">
+              <p>
+                <a href="https://github.com/yourusername">github.com/yourusername</a><br />
+                <a href="https://twitter.com/yourusername">twitter.com/yourusername</a><br />
+              </p>
+            </div>
+          </div>
+        </div>
+
+    </body>
+</html>

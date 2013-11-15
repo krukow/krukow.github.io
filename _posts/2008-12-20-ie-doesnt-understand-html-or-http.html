@@ -1,0 +1,61 @@
+---
+layout: post
+title: IE doesn't understand HTML or HTTP
+tags:
+- General
+- model view controller
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+---
+The so-called "web"-browser Internet Explorer version 7 (and probably all versions below) doesn't get HTML or HTTP. In a recent project for a client we've been building an advanced, 100% JavaScript client application that had to run in IE7 (as a minimal requirement). The application is rather complex and has to live as a component in <em>every (darn) webpage/webapp</em> on the client's intranet, including all legacy apps; essentially, the applications include this component by inserting a script tag in their pages. The component's most basic job is to help the user navigate to the existing multitude of intranet applications, supplying these applications with appropriate input (e.g., navigate to the customer mangagement app with a customer reference as input).
+
+Now these legacy applications are of different ages and have been developed in various technologies, with varying quality and standards-awareness. Now these requirements brings a bunch of problems, and I won't start complaining too much here. Instead I'll just focus on one issue: character encodings! <em>One</em> of the aspects of this scenarios is that the applications are using different character-encodings, e.g., ISO-8859-1 and UTF-8. This gives the following requirements.
+<ul>
+	<li>Cross page (cross encoding) navigation. For example, our client app often has to navigate from a UTF-8 encoded page to an ISO-8859-1 encoded page, <strong>transferring properly encoded parameters</strong> from the first page to the second.</li>
+	<li>Localization. The client app is available in various languages; together with the requirement that it must exist in UTF-8 and ISO-8859-1 encoded pages, this means that the actual JavaScript being sent on the wire must be available in different languages and encodings, based on the browsers settings.</li>
+</ul>
+You'd expect these things to be pretty basic stuff for an HTTP based app; something that would be easy in a version 7 browser.
+<h2>Cross page (cross encoding) navigation</h2>
+For various reasons irrelevant here, our client app navigates to an application by dynamically creating a form with method "GET", and plugging in the URL and the parameters for the receiving application, i.e.,
+<pre><tt>
+&lt;form method="GET" action="URL"&gt;
+&lt;input type="hidden" name="pname" value="pvalue" &gt;
+…
+&lt;/form&gt;
+</tt></pre>
+There is an implicit attribute called 'accept-charset' which <a href="http://www.w3.org/TR/html401/interact/forms.html">according to HTML 4.01 satisfies</a>:
+<blockquote>"This attribute specifies the list of character encodings for input data that is accepted by the server processing this form. The value is a space- and/or comma-delimited list of charset values. The client must interpret this list as an exclusive-or list, i.e., the server is able to accept any single character encoding per entity received. The default value for this attribute is the reserved string "UNKNOWN". User agents may interpret this value as the character encoding that was used to transmit the document containing this FORM element."</blockquote>
+The problem with IE7 is that it <em>ignores the accept-charset property entirely on forms</em>. In fact, it instead does the default behaviour for "UNKNOWN", i.e.,  "the character encoding that was used to transmit the document containing this form element." Actually, to be precise it doesn't even do that either: It turns out the IE7 encodes the form according to the current value of <tt>document.charset</tt>. Fortunately it is possible to set <tt>document.charset</tt> using JavaScript, this means that it is possible to control the encoding of form input data by setting <tt>document.charset</tt> just before the form submits. And this works. Problem solved. Kind of …
+
+Unfortunately, this hack turns out to trigger a somewhat strange and nasty bug: After form submission, IE navigates to the desired page and input data is encoded according to <tt>document.charset</tt>, which is just what we want. However, if you click the 'back'-button on the next page, IE navigates back to the original page, <em>but the <tt>document.charset</tt> property somehow persists</em> which means that the page is not interpreted with the correct encoding. OK, so we should clean up after ourselves: One would think that restoring the <tt>document.charset</tt> to it's original value after calling <tt>form.submit()</tt> would work: it doesn't.
+
+After some experimentation I found that the following works. To submit a form with input data encoded in a particular encoding:
+<ol>
+	<li>on document load, store the original page encoding</li>
+	<li>on form submit change the value of <tt>document.charset</tt> to the desired encoding, e.g., "ISO-8859-1"</li>
+	<li>on 'beforeunload' restore <tt>document.charset</tt> to it's original value.</li>
+</ol>
+<h2>Script character encodings</h2>
+Our JavaScript client app sometimes lives in a UTF-8 encoded page, sometimes in an ISO-8859-1 encoded page. The client app is loaded by including a &lt;script&gt; tag that points to a servlet that delivers the JavaScript code (customized for the requesting user and his preferred locale). By default when IE loads script, interprets the bytes it receives as characters <em>in the encoding of the current page</em>. However, it doesn't tell the server which encoding that is. More specifically, our servlet receives a request for the JavaScript client with these HTTP headers:
+<pre><tt>
+Accept : */* 
+Referer : http://localhost:10045/wps/portal/sn
+Accept-Language : da
+UA-CPU : x86
+Accept-Encoding : gzip, deflate
+User-Agent : Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; .NET CLR 1.1.4322; .NET CLR 2.0.50727; InfoPath.1; MS-RTC LM 8; .NET CLR 3.0.4506.2152; .NET CLR 3.5.30729)
+Connection : Keep-Alive
+Cache-Control : no-cache
+</tt></pre>
+
+Furthermore, even if we explicitly tell IE which encoding we have chosen, it will still ignore that and use the page encoding. More specifically, even if we return this HTTP:
+<pre><tt>
+Content-Type: application/javascript; charset=UTF-8
+</tt></pre>
+
+IE ignores the Content-Type charset. In other words: if we choose as a default (when no Accept-Charset header is present) to deliver the script in UTF-8 encoded, it breaks for ISO-8859-1 pages, and vice versa. So what to do? IE apparently doesn't speak HTTP.
+
+It turns out that one should use a script tag with a charset property to tell IE how to interpret the script. Ironically this means that on UTF-8 encoded pages one would need to say &lt;script charset="ISO-8859-1"&gt;. In other words, it is not the HTTP headers describing the resource that describes its encoding. This must be know in advance by all documents that link to the resource by embedding a charset property. Yet another reason that these are tough times to be RESTful… 

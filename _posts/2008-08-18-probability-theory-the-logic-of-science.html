@@ -1,0 +1,30 @@
+---
+layout: post
+title: 'Probability Theory: The Logic of Science'
+tags:
+- General
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+---
+This is a bit of an unusual posting. It was triggered because I am frustrated, having just written my third review for the journal <a href="http://taas.acm.org/">TAAS</a>, which I accidentally agreed to do reviews for at some point during my PhD studies. I still review papers on computational trust models which was the topic of my PhD dissertation. I have recommended 'reject' for all of these papers, not because these papers are any worse than most of what is being and has been published in that field (or what I've published myself); but because I accidentally started reading the book: <a href="http://www.amazon.com/exec/obidos/tg/detail/-/0521592712/qid=1055853130/sr=8-1/ref=sr_8_1/103-5027289-6942223?v=glance&s=books&n=507846">Probability Theory: The Logic of Science</a> by E.T. Jaynes, Cambridge University Press (June 9, 2003). This book radically changed the way I understand probability theory and its applications (which includes computational trust models). Once you read just the basic parts of his book (which is all I've read yet), you realize that much of the work being done in this area is waste; I will claim that it could all be done much simpler and with superior results if based on Jaynes formulation of probability theory (which according to Jaynes goes back to <a href="http://www.economics.soton.ac.uk/staff/aldrich/jeffreysweb.htm">Jeffreys</a> and Laplace).
+
+During my PhD studies I was working on something called experience-based trust management. Fundamentally, this topic is about programs that reason about the behaviour of agents (other dynamic programs) in large open distributed systems (think Internet). Such reasoning is based on information, usually in the form of past interactions with agents or in the form of statements made by other agents about such interaction (i.e., reputation information).
+
+After the first two years we had been working hard on creating <a href="http://dx.doi.org/10.1007/s10207-007-0014-1">a formal model for "computational trust" encompassing uncertainty</a>, based on somewhat hardcore mathematical theory of complete lattices and monotonic functions, complete partial orders and continuous functions (domain theory) and even category theory. It was abstract, it was fun, it was warm, nice and cuddly; <a href="http://www.brics.dk/~krukow/research/publications/online_papers/Progress.pdf">it</a> turned out, however, to be essentially useless... Fortunately, after approximately two years I somehow realized this and started working on the same problems, but with a less abstract approach. At some point later I somehow came by the book of Jaynes. Now, I only wish I had read that book in 2004...
+
+Anyway, I don't know how you were taught probability theory (or worse, statistics) but the courses I took had abstract definitions (corresponds <a href="http://en.wikipedia.org/wiki/Probability_theory">to what is on wikipedia</a>) that seemed magical to a first year computer science student, and abstract but at least general later when I encountered measure theory. While this is all very interesting if one is interested in abstract mathematics, when one reads Jaynes account of probability one cannot avoid to think that Jaynes approach is overwhelmingly appealing: at first sight it intuitive and much is simpler; and once one gets into the later chapters, one learns that it is also more powerful, and in fact, the rules of probability theory is proven to be the unique set of rules that satisfy an absolutely reasonable set of qualitative desiderata (this is known as <a href="http://en.wikipedia.org/wiki/Cox%27s_theorem">Cox's theorem</a> which is on wikipedia, but Jaynes' exposition is much better in my opinion, a version is <a href="http://bayes.wustl.edu/etj/prob/book.pdf">here</a> (from page 13)).
+
+ 
+I won't even try to give an account of the book here, but only recommend it to anyone even remotely interested in scientific reasoning and logic, but also applied mathematics and computer science.   There are some places that are mathematically challenging for your typical CS grad, but it still has value even if the advanced techniques and proofs are skipped. Read it before you submit any paper on trust ;-)
+
+
+
+
+
+
+
+
+ 

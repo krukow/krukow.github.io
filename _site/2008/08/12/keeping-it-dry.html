@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <title>Keeping it dry: Generating JavaScript models from Rails models</title>
+        <meta name="viewport" content="width=device-width">
+
+        <!-- syntax highlighting CSS -->
+        <link rel="stylesheet" href="/css/syntax.css">
+
+        <!-- Custom CSS -->
+        <link rel="stylesheet" href="/css/main.css">
+
+    </head>
+    <body>
+
+        <div class="site">
+          <div class="header">
+            <h1 class="title"><a href="/">Your New Jekyll Site</a></h1>
+            <a class="extra" href="/">home</a>
+          </div>
+
+          <h2>Keeping it dry: Generating JavaScript models from Rails models</h2>
+<p class="meta">12 Aug 2008</p>
+
+<div class="post">
+As I've mentioned <a href="http://higher-order.blogspot.com/2008/03/clientserver-web-apps-model-part-i.html">before</a>, I advocate using a Model-View-Controller pattern for certain types of JavaScript-heavy web-app clients. In spite of recent licensing issues, I still think ExtJS is among the better libraries supporting MVC. For example, (if you don't know what namespace/using are, please read <a href="http://blog.higher-order.net/2008/02/18/designing-clientserver-web-applications/">this</a>)
+<pre><tt><span class="function">namespace</span><span class="symbol">(</span><span class="string">'dk.okooko.model'</span><span class="symbol">);</span>
+<span class="function">using</span><span class="symbol">(</span><span class="normal">dk</span><span class="symbol">.</span><span class="normal">okooko</span><span class="symbol">.</span><span class="normal">model</span><span class="symbol">).</span><span class="function">run</span><span class="symbol">(</span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">m</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal">        </span>
+<span class="normal">        m</span><span class="symbol">.</span><span class="normal">OrderItem </span><span class="symbol">=</span><span class="normal"> Ext</span><span class="symbol">.</span><span class="normal">data</span><span class="symbol">.</span><span class="normal">Record</span><span class="symbol">.</span><span class="function">create</span><span class="symbol">([</span>
+<span class="normal">          </span><span class="cbracket">{</span><span class="string">"type"</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"int"</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"name"</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"id"</span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">          </span><span class="cbracket">{</span><span class="string">"type"</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"int"</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"name"</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"product_id"</span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">          </span><span class="cbracket">{</span><span class="string">"type"</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"int"</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"name"</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"quantity"</span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">          </span><span class="cbracket">{</span><span class="string">"type"</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"int"</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"name"</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"order_id"</span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">          </span><span class="cbracket">{</span><span class="string">"type"</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"date"</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"format"</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"d/m/Y-H:i"</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"name"</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"created_at"</span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">          </span><span class="cbracket">{</span><span class="string">"type"</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"date"</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"format"</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"d/m/Y-H:i"</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"name"</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"updated_at"</span><span class="cbracket">}</span>
+<span class="normal">        </span><span class="symbol">]);</span>
+
+<span class="cbracket">}</span><span class="symbol">);</span>
+</tt></pre>
+The 'Record.create' function gives a way of succinctly creating constructor functions for model objects which are supported throughout the Ext functions; you can read more about it <a href="http://blog.higher-order.net/2008/03/18/extending-extdatarecord-to-support-inheritance-for-domain-types/">here</a>. 
+
+If you are using Ruby on Rails at server-side (something which I have been doing quite a bit recently), then you realize that you are manually duplicating all the rails model classes in JavaScript. For example, here is the corresponding migration:
+<pre><tt><span class="keyword">class</span><span class="normal"> CreateOrderItems </span><span class="symbol">&lt;</span><span class="normal"> ActiveRecord</span><span class="symbol">::</span><span class="normal">Migration</span>
+<span class="normal">  </span><span class="keyword">def</span><span class="normal"> </span><span class="keyword">self</span><span class="symbol">.</span><span class="normal">up</span>
+<span class="normal">    create_table </span><span class="symbol">:</span><span class="normal">order_items </span><span class="keyword">do</span><span class="normal"> </span><span class="symbol">|</span><span class="normal">t</span><span class="symbol">|</span>
+<span class="normal">      t</span><span class="symbol">.</span><span class="normal">integer </span><span class="symbol">:</span><span class="normal">product_id</span>
+<span class="normal">      t</span><span class="symbol">.</span><span class="normal">integer </span><span class="symbol">:</span><span class="normal">quantity</span>
+<span class="normal">      t</span><span class="symbol">.</span><span class="normal">integer </span><span class="symbol">:</span><span class="normal">order_id</span>
+
+<span class="normal">      t</span><span class="symbol">.</span><span class="normal">timestamps</span>
+<span class="normal">    </span><span class="keyword">end</span>
+<span class="normal">  </span><span class="keyword">end</span>
+
+<span class="normal">  </span><span class="keyword">def</span><span class="normal"> </span><span class="keyword">self</span><span class="symbol">.</span><span class="normal">down</span>
+<span class="normal">    drop_table </span><span class="symbol">:</span><span class="normal">order_items</span>
+<span class="normal">  </span><span class="keyword">end</span>
+<span class="keyword">end</span>
+</tt></pre> 
+I was annoyed by this lack of dryness: whenever I changed the migration, I'd have to manually change the corresponding JS model. So I slapped together a really simple code generator which can create the model files from the rails models. It adds a method acts_as_jsmodel which is intended to be called by a rails model class, e.g.,
+
+<pre><tt><span class="keyword">class</span><span class="normal"> OrderItem </span><span class="symbol">&lt;</span><span class="normal"> ActiveRecord</span><span class="symbol">::</span><span class="normal">Base</span>
+<span class="normal">  belongs_to </span><span class="symbol">:</span><span class="normal">order</span>
+<span class="normal">  belongs_to </span><span class="symbol">:</span><span class="normal">product</span>
+<span class="normal">  has_one </span><span class="symbol">:</span><span class="normal">order_item_status</span>
+<span class="normal">  acts_as_jsmodel</span>
+<span class="keyword">end</span>
+</tt></pre>
+
+So you can annotate model classes that you'd like to generate js models for. The acts_as_jsmodel causes a file to be written to public/javascripts/dk/okooko/model (generally, it depends on a constant APP_NAMESPACE).
+
+Here is the code for the generator:
+<pre><tt><span class="keyword">module</span><span class="normal"> Trifork</span>
+<span class="normal">  </span><span class="keyword">module</span><span class="normal"> JSModel </span>
+<span class="normal">          </span>
+<span class="normal">    JS_MODEL_DIR </span><span class="symbol">=</span><span class="normal"> </span><span class="string">"public/javascripts/#{APP_NAMESPACE}/model"</span><span class="symbol">.</span><span class="normal">gsub!</span><span class="symbol">(</span><span class="string">'.'</span><span class="symbol">,</span><span class="string">'/'</span><span class="symbol">)</span>
+<span class="normal">    MODEL_PACKAGE </span><span class="symbol">=</span><span class="normal"> APP_NAMESPACE </span><span class="symbol">+</span><span class="normal"> </span><span class="string">'.model'</span>
+<span class="normal">    </span><span class="keyword">def</span><span class="normal"> acts_as_jsmodel</span>
+<span class="normal">      </span>
+<span class="normal">      export_record </span><span class="string">"#{JS_MODEL_DIR}/#{self}.js"</span><span class="normal"> </span>
+<span class="normal">      </span><span class="keyword">rescue</span><span class="normal"> </span>
+<span class="normal">        </span><span class="keyword">nil</span>
+<span class="normal">    </span><span class="keyword">end</span>
+<span class="normal">      </span>
+<span class="normal">    </span><span class="keyword">def</span><span class="normal"> export_record</span><span class="symbol">(</span><span class="normal">fn</span><span class="symbol">)</span>
+<span class="normal">      File</span><span class="symbol">.</span><span class="normal">open</span><span class="symbol">(</span><span class="normal">fn</span><span class="symbol">,</span><span class="string">'w'</span><span class="symbol">)</span><span class="normal"> </span><span class="keyword">do</span><span class="normal"> </span><span class="symbol">|</span><span class="normal">f</span><span class="symbol">|</span>
+<span class="normal">        s </span><span class="symbol">=&lt;&lt;</span><span class="keyword">END</span>
+<span class="normal">namespace</span><span class="symbol">(</span><span class="string">'#{MODEL_PACKAGE}'</span><span class="symbol">);</span>
+<span class="normal">using</span><span class="symbol">(#</span><span class="cbracket">{</span><span class="normal">MODEL_PACKAGE</span><span class="cbracket">}</span><span class="symbol">).</span><span class="normal">run</span><span class="symbol">(</span><span class="normal">function</span><span class="symbol">(</span><span class="normal">m</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal">        </span>
+<span class="normal">        m</span><span class="symbol">.#</span><span class="cbracket">{</span><span class="keyword">self</span><span class="cbracket">}</span><span class="normal"> </span><span class="symbol">=</span><span class="normal"> Ext</span><span class="symbol">.</span><span class="normal">data</span><span class="symbol">.</span><span class="normal">Record</span><span class="symbol">.</span><span class="normal">create</span><span class="symbol">([</span>
+<span class="normal">          </span><span class="symbol">#</span><span class="cbracket">{</span><span class="keyword">self</span><span class="symbol">.</span><span class="normal">to_record</span><span class="cbracket">}</span>
+<span class="normal">        </span><span class="symbol">]);</span>
+
+<span class="cbracket">}</span><span class="symbol">);</span>
+<span class="keyword">END</span>
+<span class="normal">        f</span><span class="symbol">.</span><span class="normal">write s</span>
+<span class="normal">      </span><span class="keyword">end</span>
+<span class="normal">    </span><span class="keyword">end</span>
+<span class="normal">      </span>
+<span class="normal">      </span>
+<span class="normal">    </span><span class="keyword">def</span><span class="normal"> to_record</span><span class="symbol">(</span><span class="normal">spec </span><span class="symbol">=</span><span class="normal"> </span><span class="cbracket">{}</span><span class="symbol">,</span><span class="normal">datefm</span><span class="symbol">=</span><span class="keyword">nil</span><span class="symbol">)</span>
+<span class="normal">      spec</span><span class="symbol">[:</span><span class="normal">exclude</span><span class="symbol">]</span><span class="normal"> </span><span class="symbol">||=</span><span class="normal"> </span><span class="symbol">[]</span>
+<span class="normal">      keys </span><span class="symbol">=</span><span class="normal"> spec</span><span class="symbol">[:</span><span class="normal">only</span><span class="symbol">]</span><span class="normal"> </span><span class="symbol">?</span><span class="normal"> </span><span class="symbol">[*</span><span class="normal">spec</span><span class="symbol">[:</span><span class="normal">only</span><span class="symbol">]]</span><span class="normal"> </span><span class="symbol">:</span><span class="normal"> </span>
+<span class="normal">              </span><span class="symbol">(</span><span class="normal">columns</span><span class="symbol">.</span><span class="normal">map </span><span class="symbol">&amp;:</span><span class="normal">name</span><span class="symbol">).</span><span class="normal">reject </span><span class="cbracket">{</span><span class="symbol">|</span><span class="normal">a</span><span class="symbol">|</span><span class="normal"> spec</span><span class="symbol">[:</span><span class="normal">exclude</span><span class="symbol">].</span><span class="normal">include?a</span><span class="cbracket">}</span>
+<span class="normal">      props </span><span class="symbol">=</span><span class="normal"> columns_hash</span>
+<span class="normal">      </span>
+<span class="normal">      keys</span><span class="symbol">.</span><span class="normal">map </span><span class="keyword">do</span><span class="normal"> </span><span class="symbol">|</span><span class="normal">k</span><span class="symbol">|</span>
+<span class="normal">        p </span><span class="symbol">=</span><span class="normal"> props</span><span class="symbol">[</span><span class="normal">k</span><span class="symbol">.</span><span class="normal">to_s</span><span class="symbol">]</span>
+<span class="normal">        </span><span class="keyword">if</span><span class="normal"> p</span><span class="symbol">.</span><span class="normal">nil?</span>
+<span class="normal">          </span><span class="keyword">raise</span><span class="normal"> </span><span class="string">"Property #{p} is not a column of #{self}"</span>
+<span class="normal">        </span><span class="keyword">end</span>
+<span class="normal">        </span><span class="cbracket">{</span><span class="symbol">:</span><span class="normal">name </span><span class="symbol">=&gt;</span><span class="normal"> p</span><span class="symbol">.</span><span class="normal">name</span><span class="cbracket">}</span><span class="symbol">.</span><span class="normal">merge!</span><span class="symbol">(</span><span class="normal">Trifork</span><span class="symbol">::</span><span class="normal">JSModel</span><span class="symbol">::</span><span class="normal">to_ext_type</span><span class="symbol">(</span><span class="normal">p</span><span class="symbol">.</span><span class="normal">type</span><span class="symbol">,</span><span class="normal">datefm</span><span class="symbol">)).</span><span class="normal">to_json</span>
+<span class="normal">      </span><span class="keyword">end</span><span class="symbol">.</span><span class="normal">join</span><span class="symbol">(</span><span class="string">",\n          "</span><span class="symbol">)</span>
+<span class="normal">      </span>
+<span class="normal">    </span><span class="keyword">end</span>
+<span class="normal">     </span>
+<span class="normal">    </span>
+<span class="normal">    </span><span class="keyword">def</span><span class="normal"> </span><span class="keyword">self</span><span class="symbol">.</span><span class="normal">to_ext_type</span><span class="symbol">(</span><span class="normal">t</span><span class="symbol">,</span><span class="normal">datefm</span><span class="symbol">)</span>
+<span class="normal">      type </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">case</span><span class="normal"> t</span>
+<span class="normal">      </span><span class="keyword">when</span><span class="normal"> </span><span class="symbol">:</span><span class="normal">integer </span><span class="keyword">then</span><span class="normal"> </span><span class="string">'int'</span>
+<span class="normal">      </span><span class="keyword">when</span><span class="normal"> </span><span class="symbol">:</span><span class="normal">string</span><span class="symbol">,</span><span class="normal"> </span><span class="symbol">:</span><span class="normal">text </span><span class="keyword">then</span><span class="normal"> </span><span class="string">'string'</span><span class="normal"> </span>
+<span class="normal">      </span><span class="keyword">when</span><span class="normal"> </span><span class="symbol">:</span><span class="normal">boolean </span><span class="keyword">then</span><span class="normal"> </span><span class="string">'bool'</span><span class="normal"> </span>
+<span class="normal">      </span><span class="keyword">when</span><span class="normal"> </span><span class="symbol">:</span><span class="normal">datetime </span><span class="keyword">then</span><span class="normal"> </span><span class="string">'date'</span>
+<span class="normal">      </span><span class="keyword">else</span>
+<span class="normal">        </span><span class="string">'auto'</span>
+<span class="normal">      </span><span class="keyword">end</span>
+<span class="normal">      res </span><span class="symbol">=</span><span class="normal"> </span><span class="cbracket">{</span><span class="symbol">:</span><span class="normal">type </span><span class="symbol">=&gt;</span><span class="normal"> type</span><span class="cbracket">}</span>
+<span class="normal">      res</span><span class="symbol">.</span><span class="normal">merge!</span><span class="symbol">(:</span><span class="normal">format </span><span class="symbol">=&gt;</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">datefm </span><span class="symbol">||</span><span class="normal"> </span><span class="string">'d/m/Y-H:i'</span><span class="symbol">))</span><span class="normal"> </span><span class="keyword">if</span><span class="normal"> t</span><span class="symbol">==:</span><span class="normal">datetime</span>
+<span class="normal">      res</span>
+<span class="normal">    </span><span class="keyword">end</span>
+<span class="normal">    </span>
+<span class="normal">  </span><span class="keyword">end</span>
+<span class="keyword">end</span></tt></pre>
+
+You can download the files from this entry <a href="http://blog.higher-order.net/files/extmodels.zip">here</a>. 
+
+</div>
+
+
+          <div class="footer">
+            <div class="contact">
+              <p>
+                Your Name<br />
+                What You Are<br />
+                you@example.com
+              </p>
+            </div>
+            <div class="contact">
+              <p>
+                <a href="https://github.com/yourusername">github.com/yourusername</a><br />
+                <a href="https://twitter.com/yourusername">twitter.com/yourusername</a><br />
+              </p>
+            </div>
+          </div>
+        </div>
+
+    </body>
+</html>

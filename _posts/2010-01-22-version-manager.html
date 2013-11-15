@@ -1,0 +1,93 @@
+---
+layout: post
+title: VersionManager
+tags:
+- JavaScript
+- namespacing
+- with
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+  _wp_old_slug: fuse-blows
+---
+[update: First, my apologies to jdalton, my post was not meant to derail Fusebox, merely to show a different approach to similar problems. ]
+
+I read a <a href="http://ajaxian.com/archives/de-fusing-javascript-natives-with-the-fusebox">post on Ajaxian</a> about <a href="http://github.com/jdalton/fusebox">Fusebox</a>, a JavaScript library which is described as:
+
+<blockquote>[...] The problem is that frameworks / libraries / third-party scripts may overwrite native methods or each other's custom methods resulting in unpredictable outcomes. Fusebox, a limited version of the sandboxing component found in FuseJS, avoids these issues by creating sandboxed natives which can be extended without affecting the document natives.</blockquote>
+
+I think Fusebox is a good project. The code in this blog post shows a different approach which in some situations may be more useful and in others, it may not.
+
+With Fusebox script developers avoid polluting the globals by writing their scripts using FuseBox and its wrappers. E.g, you write code with a "Fusebox prefix" like this:
+<code><pre>
+  var fb = Fusebox();
+  fb.Array.prototype.hai = function() {
+    return fb.String("Oh hai, we have " + this.length + " items.");
+  };
+  fb.Array(1,2,3).hai(); // "Oh hai, we have 3 items."
+  typeof window.Array.prototype.hai; // undefined
+
+// like the native Array constructor the sandboxed constructor will return [ , , ]
+  var a = fb.Array(3);
+  // equiv to square-bracket notation [3]
+  var b = fb.Array.create(3);
+  // converting a native array to a sandboxed array
+  var c = fb.Array.fromArray([1, 2, 3]);
+</pre></code>
+
+That immediately reminded be of some work I've have been doing with colleague Jimmy Junker at Trifork (<tt>jju at trifork com</tt>) motivated by the following problem:
+
+<blockquote> In portal environments where multiple portlets want to use different JavaScript libraries or different versions of the same JavaScript libraries, you are very likely to run in to problems since almost all libraries (except later YUI versions) are designed to live in the global namespace.</blockquote>
+
+After a brainstorming session we developed a simple <em>prototype</em> (no pun intended), uninspiringly named "VersionManager", with which we succeeded in loading two different versions of the PrototypeJS library. With VersionManager you can write code like this:
+<code><pre>
+with (VersionManager.version("1.6.1")) {
+//"1.6.1" refers to prototype which must have been loaded
+  console.log("abcdaba".gsub("a","42"));// console.logs '42bcd42b42'
+  console.log(typeof Object.extend);// console.logs 'function'
+  $A([1,2,3])._each(function(x){
+    console.log(x);
+  });// console.logs '1','2','3'
+}
+VersionManager.clear();//otherwise previous version is lingering...
+try {
+  console.log(typeof "".gsub);
+//console.logs 'function' <= this is generic delegating proxy function
+  console.log("abcdaba".gsub("a","42"));//throws error
+} catch (e) {
+  console.log(e);
+  //TypeError: "attempt call to delegate with no version defined (see documentation)" 
+}
+console.log(typeof Object.extend);// console.logs 'undefined'
+console.log(typeof $A);// console.logs 'undefined'
+</pre></code>
+
+So version manager lets you load several libraries on the page, and sandboxes changes made to globals. By telling VersionManager which version you want to use for a particular block you code, you can use each of those libraries, <em>even if they define the same global variables or properties on the prototypes of objects,</em> e.g., <tt>Array.prototype</tt>. 
+
+ VersionManager also creates sandboxes, but as opposed to Fusebox, what is sandboxed is "changes made to" the built-ins, and global variables defined. Also, the goal is not to avoid extending the prototypes, but almost the opposite: to allow several scripts/libraries that would otherwise conflict to live in the same page without seeing each other, even if they define the same global names or want to extend built-in prototypes in different ways.
+
+With VersionManager you simply write regular user code, but wrap it in a with statement. This means that existing code can easily be rewritten.
+
+The loaded "sandboxed" libraries must adhere to a few syntactic and semantic constraints. 
+For an example, see a sandboxed version of prototypejs here
+
+<a href="http://github.com/krukow/versionmanager/blob/master/test/assets/prototype.js">Transformed prototypejs</a>
+
+The transformation applied to prototypejs is very simple and can be done automatically (i.e., it is easy to write a program that performs this script-transformation for you). It is a bit technical, but it results in is adding a declaration with-statement "header" at the beginning and a "footer" and the end. In fact, we are writing a program that transforms any JavaScript program/library into an equivalent one that adheres to these constraints. 
+
+An alpha version is on github. It is a proof-of-concept that shows that the fundamental approach seems to work. 
+
+jdalton pointed out a couple of things :
+<ul>
+	<li>You may run into problems with minifiers given that your code is wrapped in 'with'. However, you can minify the code first, and then wrap it.</li>
+	<li>It doesn't track changes to event or elements.</li>
+
+</ul>
+
+So far, we've tested it only in latest Firefox and Safari, but I see no reason why it couldn't work in other recent browsers.  We have sucessfully loaded prototypejs in a sandbox, and managed to run all prototypejs unit tests successfully inside the sandbox.
+
+Github project: <a href="http://github.com/krukow/versionmanager">http://github.com/krukow/versionmanager</a>
+
+/Karl 

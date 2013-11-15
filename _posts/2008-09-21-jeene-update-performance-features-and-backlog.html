@@ -1,0 +1,143 @@
+---
+layout: post
+title: 'Jeene update: Performance, features and backlog'
+tags:
+- General
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+---
+Don't know what Jeene is? It will make your JavaScript code run faster ;-) read <a href="http://blog.higher-order.net/2008/09/14/jeene/">the intro</a> first, 
+then come back to this!
+<h4>Performance examples</h4>
+I was curious about the performance gains of functions specialized via Jeene, so I ran a simple performance example in Firefox 2 and 3; Safari 3.1.2; Opera 9.52; SquirrelFish Extreme (the <a href="http://webkit.org/blog/214/introducing-squirrelfish-extreme/">new</a> JIT); IE 6, 7 ; Google's Chrome and finally, TraceMonkey. All with great results! You can run the simple example <a href="http://blog.higher-order.net/files/jeene/examples/performance_simple1.html">here</a>.
+
+The test executes the string concatenation example from the previous post. The actual example is not that interesting; what is interesting is that Jeene works in all current popular JavaScript implementations and that it gives good performance boosts also in the new JITs: V8, TraceMonkey and SquirrelFish Extreme. The figures include the time it takes to specialize the function, so they are actual performance gains. (Note that the Windows and Mac tests were on different hardware).
+
+<ul>	
+<li>Firefox 2: (Windows Vista)
+<ol>
+<li>Without specialization: 1430ms;</li>
+<li>With  specialization: 635ms;</li>
+<li><strong>Specialization reduces time by approx. 56%.</strong></li>
+</ol>
+</li>
+<li>Firefox 3: (Mac)
+<ol>
+<li>Without specialization: 386ms;</li>
+<li>With  specialization: 230ms;</li>
+<li><strong>Specialization reduces time by approx. 40%.</strong></li>
+</ol>
+</li>
+<li>Opera 9.52: (Mac)
+<ol>
+<li>Without specialization: 502ms;</li>
+<li>With  specialization: 251ms;</li>
+<li><strong>Specialization reduces time by approx. 50%.</strong></li>
+</ol>
+</li>
+
+<li>Firefox 3.1 - TraceMonkey (Mac)
+<ol>
+<li>Without specialization: 302;</li>
+<li>With  specialization: 152ms;</li>
+<li><strong>Specialization reduces time by approx. 50%</strong>.</li>
+</ol>
+</li>
+<li>Chrome - V8: (Windows Vista)
+<ol>
+<li>Without specialization: 227ms;</li>
+<li>With  specialization: 83ms;</li>
+<li><strong>Specialization reduces time by approx. 63%</strong>.</li>
+</ol>
+</li>
+
+<li>IE6/7 (approx. the same numbers) (Windows Vista)
+<ol>
+<li>Without specialization: 2672ms;</li>
+<li>With  specialization: 1485ms;</li>
+<li><strong>Specialization reduces time by approx. 44%</strong>.</li>
+</ol>
+</li>
+
+
+
+<li>Safari 3.1.2 (Mac)
+<ol>
+<li>Without specialization: 378ms;</li>
+<li>With  specialization: 157ms;</li>
+<li><strong>Specialization reduces time by approx. 58%</strong>.</li>
+</ol>
+</li>
+
+<li>WebKit nightly -- SquirrelFish Extreme (Mac)
+<ol>
+<li>Without specialization: 247ms;</li>
+<li>With  specialization: 94ms;</li>
+<li><strong>Specialization reduces time by approx. 61%</strong>.</li>
+</ol>
+</li>
+
+</ul>
+
+
+
+ 
+<h4>What can Jeene do right now?</h4>
+ Specialize JavaScript functions written in simplified JavaScript which contain
+the following constructs (note as of now you can only specialize with primitive values,
+e.g., strings and numbers; this will be fixed soon):
+
+<ul>
+    <li>variables which occur in the function's formal parameter</li>
+    <li>literals and constants ("abc", 42, true, null)</li>
+    <li>simple assignment '='</li>
+    <li>and, or, not logical operators '&amp;&amp;', '||', '!'</li>
+    <li>plus and minus binary operators ('+' and '-'); by default it assumes '+' 
+    to be associative, which is not sound in general but is for common case uses (ask me for details)</li>
+    <li>return statements</li>
+</ul>
+<h4>What Jeene can't  do right now (i.e., what I am working on). </h4>
+
+Some of these are easy, others are harder and need careful analysis.
+<ul>
+    <li>global variables (in general variables in the function's closure)</li>
+    <li>'var' statements (i.e., local variable declaration and initialization)</li>
+    <li>incrementing/decrementing assignments ('+=' and '-=') </li>
+    <li>ternary if, i.e., "exp ? v1 : v2" operator</li>
+    <li>comparison "===", "!==", "&lt;", "&lt;=", "&gt;", "&gt;="</li>
+    <li>multiplication, division ('*','/')</li>
+    <li>static/dynamic property lookup ('.' and '[')</li>
+    <li>function calls ("fn()")</li>
+    <li>unary minus ('-1')</li>
+    <li>typeof operator ('typeof x')</li>
+    <li>function operator ('function(){}')</li>
+    <li>expression statements, array and object literals</li>
+    <li>expression statements, array and object literals</li>
+    <li>'if', 'break'  statements</li>
+    <li>'while' and 'for' statements</li>
+</ul>
+
+
+<h3>New in latest svn commit</h3>
+Jeene can now handle simple assignments of the form (x = exp) where x is a variable and exp is an expression. Further, formal parameters which are specialized disappear from the formal parameters in the specialized function, but now appear as local variables of that function (so that one can assign to them).
+
+Consider this example:
+<pre><tt><span class="normal">Function</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">.</span><span class="normal">specialize </span><span class="symbol">=</span><span class="normal"> net</span><span class="symbol">.</span><span class="normal">higherorder</span><span class="symbol">.</span><span class="normal">jeene</span><span class="symbol">.</span><span class="normal">Jeene</span><span class="symbol">.</span><span class="function">make</span><span class="symbol">();</span>
+<span class="normal">source_fun </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">a</span><span class="symbol">,</span><span class="normal">b</span><span class="symbol">,</span><span class="normal">c</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">    c </span><span class="symbol">=</span><span class="normal"> a</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="keyword">return</span><span class="normal"> b</span><span class="symbol">+</span><span class="normal">c</span><span class="symbol">;</span>
+<span class="cbracket">}</span><span class="symbol">;</span>
+<span class="keyword">var</span><span class="normal"> env </span><span class="symbol">=</span><span class="normal"> </span><span class="cbracket">{</span><span class="normal">a</span><span class="symbol">:</span><span class="number">3</span><span class="symbol">,</span><span class="normal"> b</span><span class="symbol">:</span><span class="number">2</span><span class="cbracket">}</span><span class="symbol">;</span>
+<span class="normal">res </span><span class="symbol">=</span><span class="normal"> source_fun</span><span class="symbol">.</span><span class="function">specialize</span><span class="symbol">(</span><span class="normal">env</span><span class="symbol">);</span>
+
+<p>Result: 
+
+(function (c) {var a, b;return 5;})
+</tt></pre>
+<p>Note that the assignment c=a; can be eliminated and the static value of a is propagated to c so that the expression returned is static. Neat ;-)
+
+Check back for more later...
+ 

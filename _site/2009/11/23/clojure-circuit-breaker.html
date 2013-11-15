@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <title>Clojure circuit breaker</title>
+        <meta name="viewport" content="width=device-width">
+
+        <!-- syntax highlighting CSS -->
+        <link rel="stylesheet" href="/css/syntax.css">
+
+        <!-- Custom CSS -->
+        <link rel="stylesheet" href="/css/main.css">
+
+    </head>
+    <body>
+
+        <div class="site">
+          <div class="header">
+            <h1 class="title"><a href="/">Your New Jekyll Site</a></h1>
+            <a class="extra" href="/">home</a>
+          </div>
+
+          <h2>Clojure circuit breaker</h2>
+<p class="meta">23 Nov 2009</p>
+
+<div class="post">
+[Update Jan 1., 2010: A couple of people have been linking and twitting this, so I've made the blog entry match the current Clojure version at github. Code works in the 'new' branch of Clojure: tested with commit 3ae9e8874d43f9fd37e59bb7ea8cce0f85bac101.
+
+There is support for creating several circuit breakers wrapping given functions].
+
+As an exercise in Clojure, I've implemented a mostly functional version of Michael Nygaard's stability pattern "Circuit breaker" (<a title="http://www.pragprog.com/titles/mnee/release-it" href="http://www.pragprog.com/titles/mnee/release-it">http://www.pragprog.com/titles/mnee/release-it</a>).
+
+The implementation uses the new constructs <a href="http://www.assembla.com/wiki/show/clojure/Datatypes">deftype</a> and <a href="http://www.assembla.com/wiki/show/clojure/Protocols">defprotocol</a> (which are looking really interesting to me!). The implementation maintains a single identity named "state" which is an atom holding the current state (open, closed, initial-half-open or pending-half-open).
+
+More on deftype and defprotocol can be found <a href="http://groups.google.com/group/clojure/tree/browse_frm/thread/a59165f208f594cb/cf144fd0ab4de13f?hl=en&rnum=21&_done=%2Fgroup%2Fclojure%2Fbrowse_frm%2Fthread%2Fa59165f208f594cb%2F8e60316b5894f36b%3Fhl%3Den%26#doc_330c230e8dc857a9">here</a>.
+
+Here is the code that defines the states and the state transitions (requires JavaScript; otherwise use <a href="http://gist.github.com/267168">this link</a>). Notice how the events 'on-before-call', 'on-success' and 'on-error' are implemented as a protocol defining state-transition functions. I really like the features Rich is adding to Clojure - to me it makes modeling so much more natural (with an OO-background), while retaining the benefits of functional programming.
+
+<script src="http://gist.github.com/267168.js?file=circuit+breaker+states.clj"></script>
+
+Notice how this snipplet defines the transition functions, the four states as well as an "abstract" implementation of the state transitions. The abs-transitions can be used as default implementations when extending the protocol to the state-types. In Java, this would correspond to an interface (CircuitBreakerTransitions), an abstract super-class implementing the interface, and four immutable classes (the states). However, Clojures deftype and defprotocol does not create a type-hierarchy, and is much more dynamic (you can always define how a given type extends to a protocol - it is not fixed at type definition time). Here is how I extended my types to the protocol: 
+
+<script src="http://gist.github.com/267169.js?file=extending.clj"></script>
+(<a href="http://gist.github.com/267169">http://gist.github.com/267169</a>)
+
+This defines a completely functional transition-system between the four states. I think this reads really well, for example consider the on-error event in the closed state: this checks to see if the states fail-count is equal to the threshold defined in the policy, if so it transitions to the open state, recording the current time <tt>(OpenState p (System/currentTimeMillis))</tt> (preserving the policy); otherwise it transitions to a closed state with a higher fail-count. 
+
+The actual circuit breaker uses these transition functions:
+
+<script src="http://gist.github.com/267172.js?file=logic.clj"></script>
+(<a href="http://gist.github.com/267172">http://gist.github.com/267172</a>)
+
+The state of a circuit breaker is an atom (the only mutable construct in this example). The function wrap takes a function f and returns a "wrapped" version of f, which implements the circuit breaker functionality around f. 
+
+Notice how dead-simple this is to test:
+
+<script src="http://gist.github.com/267173.js?file=test+logic.clj"></script>
+(<a href="http://gist.github.com/267173">http://gist.github.com/267173</a>)
+
+Full Source:
+<a href="http://github.com/krukow/clojure-circuit-breaker">http://github.com/krukow/clojure-circuit-breaker</a>
+ 
+
+</div>
+
+
+          <div class="footer">
+            <div class="contact">
+              <p>
+                Your Name<br />
+                What You Are<br />
+                you@example.com
+              </p>
+            </div>
+            <div class="contact">
+              <p>
+                <a href="https://github.com/yourusername">github.com/yourusername</a><br />
+                <a href="https://twitter.com/yourusername">twitter.com/yourusername</a><br />
+              </p>
+            </div>
+          </div>
+        </div>
+
+    </body>
+</html>

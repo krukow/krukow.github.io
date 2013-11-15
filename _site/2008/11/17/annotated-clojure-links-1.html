@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <title>Annotated Clojure links - part 1</title>
+        <meta name="viewport" content="width=device-width">
+
+        <!-- syntax highlighting CSS -->
+        <link rel="stylesheet" href="/css/syntax.css">
+
+        <!-- Custom CSS -->
+        <link rel="stylesheet" href="/css/main.css">
+
+    </head>
+    <body>
+
+        <div class="site">
+          <div class="header">
+            <h1 class="title"><a href="/">Your New Jekyll Site</a></h1>
+            <a class="extra" href="/">home</a>
+          </div>
+
+          <h2>Annotated Clojure links - part 1</h2>
+<p class="meta">17 Nov 2008</p>
+
+<div class="post">
+RESTafarians will tell you that hypermedia is one of the essential ingredients of REST (and the web in particular), and that most people aren't taking this seriously enough. In my <a href="http://blog.higher-order.net/2008/10/18/the-need-for-clojure/">last posting</a> I claimed that 
+
+<blockquote>I will write a number of blog postings about my experiences with Clojure. [...] However, to my knowledge, there is less information about how to actually program Clojure.</blockquote>
+
+Well, my knowledge was wrong. Surprise, surprise --  <em>I'm not the first person to discover Clojure, be excited and decide to blog about it…</em> 
+
+So instead of showing you Clojure fibonacci, (prn "hello world") and writing imprecisely about functions and macros, I'll hyper-point to to high-quality information on 'getting started with Clojure'. If nothing else, my links will increase the PageRank of those blogs ;-) So here is my <a href="http://roy.gbiv.com/untangled/2008/rest-apis-must-be-hypertext-driven#comment-720">RESTful</a> description of one path to Clojure. 
+
+<em>Readers please add your high-quality Clojure links and provide a reasonable description in the blog comments</em>.
+
+<h1>Part I - getting started</h1>
+
+<h4>Clojure theory</h4>
+<DL>
+<DT><strong>Get excited:</strong> <a href="http://clojure.blip.tv/posts?view=archive&nsfw=dc">Clojure for Java Programmers</a>
+<DD>Get excited by watching the Clojure videos. For the basics, see Clojure for Java Programmers <a href="http://clojure.blip.tv/file/982823/">1</a> and <a href="http://clojure.blip.tv/file/982957/">2</a>, with accompanying <a href="http://clojure.googlegroups.com/web/clojureforjava.pdf?gda=SPRLpEQAAABoLitVpBTEcNIQc_NHg39S_Hg1WbQBMCYf_Oa__Wpb2_lgf_VMSjZff-zXA-oQn0tV6u9SiETdg0Q2ffAyHU-dzc4BZkLnSFWX59nr5BxGqA">slides</a>. This is great quality information targeted directly at Java programmers. You should have a strong background in Java and be knowledgeable of Java concurrency (I personally recommend <a href="http://www.javaconcurrencyinpractice.com">Java Concurrency in Practice</a> by Brian Goetz et al.).
+
+<DT><strong>Re-iterate your understanding</strong>, and go deeper: comparison with other Lisps
+<DD>If you are ready to dig deeper into this: Clojure for Lisp programmers <a href="http://clojure.blip.tv/file/1313398/">1</a> and <a href="http://clojure.blip.tv/file/1313503/">2</a>, with accompanying <a href="http://clojure.googlegroups.com/web/clojureforlispers.pdf?gda=qKPp-0cAAABoLitVpBTEcNIQc_NHg39S_Hg1WbQBMCYf_Oa__Wpb2ycL8mivbekMeNcp6E6jSjlhmrMR3uGvvPr01Poh-10xeV4duv6pDMGhhhZdjQlNAw">slides</a>. There is even a transcript of the <a href="http://clojure.googlegroups.com/web/Clojure-Boston-Lisp-Part-1-Audience-Questions.txt?gda=0JV7XGMAAABoLitVpBTEcNIQc_NHg39S9EVzVqTfJEKgN0GfEMHKcdqTlnRwfVqz5geyahrZGmA1E9s6yhuH7As86UQFPAq6i-zGDlAIph5kzt6swNluoDK2In4d0Zhhw-L_T2mXw3sVYu945paPNtiemeSmbFxa">audience questions for part 1</a>.
+
+<DT><a href="http://clojure.org">The Clojure website</a>
+<DD>There is a lot of information on the website. To me, this information made the most sense <em>after</em> having seen the videos. I particularly like the essay: <a href="http://clojure.org/state">Values and Change</a> which explains Clojure's functional approach to mutability and state. Furthermore, sometimes when watching the videos you'll want to clarify something. A good way to do this is reading the <a href="http://clojure.org/api">API docs</a> on the site (which is quite precise) and then open up a <a href="http://clojure.org/getting_started">REPL</a> (see next step) and try it out.
+</DL>
+
+<h4>A Clojure environment</h4>
+In order to get Clojure up and running you need to setup a working environment containing Java 5 or 6, Clojure and some kind of IDE or text editor. I've had success with Aquamacs (which is an Emacs for Mac).
+<DL>
+<DT><strong>Emacs &amp; Unix:</strong> <a href="http://riddell.us/clojure/">Clojure, Emacs and Slime/Swank on Ubuntu 8.10</a>
+<DD><a href="http://www.cliki.net/SLIME">Slime/Swank</a> is a development environment for Emacs. Adapting this guide to Mac and Aquamacs was easy. A couple of useful Emacs commands:
+<ul>
+<li><font face="courier">C-x C-e</font> (Ctrl+x then Ctrl+e or "hold Ctrl then press x then e the release"). Send the current expression (to the left of cursor) to Slime.</li>
+<li><font face="courier">C-c C-d C-d</font>. Show docs for the current symbol.</li>
+<li><font face="courier">C-c RET</font>. Macro-expand once.</li>
+<li><font face="courier">M-.</font>. Goto (edit) definition of current symbol; and.</li>
+<li><font face="courier">M-,</font>. return from Goto (edit) definition of current symbol.</li>
+</ul>
+
+<DT><strong>Others:</strong> <a href="http://code.google.com/p/clojure-dev/">Eclipse IDE</a>, <a href="http://enclojure.org/">Netbeans plugin</a>, <a href="http://groups.google.com/group/clojure/browse_thread/thread/c8b7bc3106c39791#">Vim anyone?</a> 
+<DD>I only have experience with the Emacs setup - it works fine so far.
+</DL>
+
+If you are annoyed with Aquamacs keeping opening windows on you:
+<tt>(custom-set-variables
+ '(one-buffer-one-frame-mode nil nil (aquamacs-frame-setup)))
+</tt>
+
+Bill Clementson is currently blogging Clojure. He has a <a href="http://bc.tech.coop/blog/081023.html">setup</a> posting where he is able to run JSwat Java debugger with Clojure. More detailed information about debugging with JSwat <a href="http://groups.google.com/group/clojure/browse_thread/thread/403e593c86c2893f">here</a>.
+
+<strong>I plan to go into depth on various parts of Clojure</strong> in the next couple of postings. It will be the same style of annotated links, possibly with discussion if I feel I have anything interesting to say.
+ 
+
+</div>
+
+
+          <div class="footer">
+            <div class="contact">
+              <p>
+                Your Name<br />
+                What You Are<br />
+                you@example.com
+              </p>
+            </div>
+            <div class="contact">
+              <p>
+                <a href="https://github.com/yourusername">github.com/yourusername</a><br />
+                <a href="https://twitter.com/yourusername">twitter.com/yourusername</a><br />
+              </p>
+            </div>
+          </div>
+        </div>
+
+    </body>
+</html>

@@ -1,0 +1,63 @@
+---
+layout: post
+title: 'Fibers: a solution'
+tags:
+- General
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+---
+Here I will post a solution to the Fibers exercise... Post your solutions as comments.
+
+Your code should at least pass the following simple test:
+<pre><tt><span class="preproc">require</span><span class="normal"> </span><span class="string">'fiber_stack'</span>
+<span class="preproc">require</span><span class="normal"> </span><span class="string">'test/unit'</span>
+
+<span class="keyword">class</span><span class="normal"> FiberStackTest </span><span class="symbol">&lt;</span><span class="normal"> Test</span><span class="symbol">::</span><span class="normal">Unit</span><span class="symbol">::</span><span class="normal">TestCase</span>
+<span class="normal">      </span>
+<span class="normal">  </span><span class="keyword">def</span><span class="normal"> test_simple</span>
+<span class="normal">    fs </span><span class="symbol">=</span><span class="normal"> FiberStack</span><span class="symbol">.</span><span class="normal">new</span>
+<span class="normal">    assert fs</span><span class="symbol">.</span><span class="normal">empty?</span>
+<span class="normal">    fs</span><span class="symbol">.</span><span class="normal">push </span><span class="string">'a'</span>
+<span class="normal">    fs</span><span class="symbol">.</span><span class="normal">push </span><span class="string">'b'</span>
+<span class="normal">    assert_equal </span><span class="number">2</span><span class="symbol">,</span><span class="normal"> fs</span><span class="symbol">.</span><span class="normal">size</span>
+<span class="normal">    </span>
+<span class="normal">    assert_equal </span><span class="string">'b'</span><span class="symbol">,</span><span class="normal"> fs</span><span class="symbol">.</span><span class="normal">pop</span>
+<span class="normal">    assert_equal </span><span class="number">1</span><span class="symbol">,</span><span class="normal"> fs</span><span class="symbol">.</span><span class="normal">size</span>
+<span class="normal">    assert_equal </span><span class="string">'a'</span><span class="symbol">,</span><span class="normal"> fs</span><span class="symbol">.</span><span class="normal">pop</span>
+<span class="normal">    assert fs</span><span class="symbol">.</span><span class="normal">empty?</span>
+<span class="normal">    assert_equal </span><span class="number">0</span><span class="symbol">,</span><span class="normal"> fs</span><span class="symbol">.</span><span class="normal">size</span>
+<span class="normal">    </span>
+<span class="normal">    assert_nil fs</span><span class="symbol">.</span><span class="normal">pop</span>
+<span class="normal">    assert fs</span><span class="symbol">.</span><span class="normal">empty?</span>
+<span class="normal">    assert_equal </span><span class="number">0</span><span class="symbol">,</span><span class="normal"> fs</span><span class="symbol">.</span><span class="normal">size</span>
+<span class="normal">    </span>
+<span class="normal">    fs</span><span class="symbol">.</span><span class="normal">push </span><span class="string">'c'</span>
+<span class="normal">    assert_equal </span><span class="keyword">false</span><span class="symbol">,</span><span class="normal"> fs</span><span class="symbol">.</span><span class="normal">empty?</span>
+<span class="normal">    assert_equal </span><span class="number">1</span><span class="symbol">,</span><span class="normal"> fs</span><span class="symbol">.</span><span class="normal">size</span>
+<span class="normal">    </span>
+<span class="normal">    assert_equal </span><span class="string">'c'</span><span class="symbol">,</span><span class="normal"> fs</span><span class="symbol">.</span><span class="normal">pop</span>
+<span class="normal">    assert fs</span><span class="symbol">.</span><span class="normal">empty?</span>
+<span class="normal">    assert_equal </span><span class="number">0</span><span class="symbol">,</span><span class="normal"> fs</span><span class="symbol">.</span><span class="normal">size</span>
+<span class="normal">  </span><span class="keyword">end</span>
+<span class="keyword">end</span>
+
+<span class="preproc">require</span><span class="normal"> </span><span class="string">'test/unit/ui/console/testrunner'</span>
+<span class="normal">Test</span><span class="symbol">::</span><span class="normal">Unit</span><span class="symbol">::</span><span class="normal">UI</span><span class="symbol">::</span><span class="normal">Console</span><span class="symbol">::</span><span class="normal">TestRunner</span><span class="symbol">.</span><span class="normal">run</span><span class="symbol">(</span><span class="normal">FiberStackTest</span><span class="symbol">)</span>
+</tt></pre>
+
+with the following result:
+
+<pre>
+krukow:~/Projects/private/Fiber/lib$ ruby run_stack.rb 
+Loaded suite FiberStackTest
+Started
+.
+Finished in 0.002572 seconds.
+
+1 tests, 15 assertions, 0 failures, 0 errors
+krukow:~/Projects/private/Fiber/lib$
+</pre>
+Have fun ;-) 

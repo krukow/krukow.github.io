@@ -1,0 +1,103 @@
+---
+layout: post
+title: Monty hall and Bayesian probability theory
+tags:
+- General
+- model view controller
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+---
+<a href="http://www.codinghorror.com/blog/archives/001278.html">Jeff Atwood discusses the "Monty hall" problem</a>. I made a comment about why I believe people's intuition is often wrong when presented with the problem: I believe it is due to the way probability theory is taught in schools and universities. The notion of probability simply as an extension of classical logic as presented by Edwin Jaynes matches intuition much more closely. To solve the Monty Hall problem we need three simple principles (which apply to a <strong>wide</strong> range of problems):
+<ul>
+	<li> Probability is about information. Forget notions of "random" experiments, e.g., the outcome of throwing a die is about the laws of physics - there is no magical randomness built into the die causing it to come up with each side equally often "in the long run" (what ever that means). If we know the laws of physics and have enough information about the experiment we might assign other probabilities to the outcomes. This means that <em>if new information is obtained the probability changes</em>!</li>
+</ul>
+<ul>
+	<li>In the name of science, we shall not make any unwarranted conclusions, and we promise to use all the information at hand, not deliberately discarding information (for what ever reason).</li>
+</ul>
+<ul>
+	<li>We use the laws of probability theory.</li>
+</ul>
+The first point is where the problem lies. In fact the probabilities are just a formalization of the <em>information</em> we have. This is why we always condition the probability on some information e.g., P(A | I) is the probability of proposition A given the information I.
+
+Let's solve Monty Hall using the principles presented in Jaynes' book. Notice that these techniques are completely general and can solve many different problems of this nature; the key in Monty Hall is not to make any unjustified conclusions, but simply <em>consider all the information at hand!</em>
+
+Lets name the doors A, B and C, and let us assume that we initially selected door A (the argument applies for any other initial choice as well). Let us write I for the information we have initially (before opening any doors) - this includes the rules of the game. More precisely I is the conjunction of statements:
+
+* We have chosen door A.
+
+* The host knows where the car is, and may only open a door that does not contain the car.
+
+* The host may not open the door we selected (A) (even if it does not contain the car).
+
+We formalize the information I in probability equations below. Let us consider three mutually exclusive and exhaustive propositions
+
+A = the car is behind door A;
+
+B = the car is behind door B;
+
+C = the car is behind door C
+
+By the principle of indifference, given only the initial information, I, we have
+
+P(A | I) = P(B | I) = P(C | I) = 1/3
+
+Notice also that so far intuition is completely clear.
+
+Let us now assume that the host opens door C. Let H be the statement:
+
+H = the host opened door C
+
+(the argument is similar for any other choice). The important point here is that we are given additional information beyond our prior information, I. Now let us first derive the correct solution, we then analyze where peoples intuition usually goes wrong.
+
+By the rules of probability theory (specifically Bayes theorem) we have
+
+P(A | HI) = P(A|I) P(H | AI)/P(H|I)
+
+The quantity P(A|HI) is what we are interested in: the probability of the car being behind door A given <em>all the information available to us</em>.
+
+We know P(A|I) is 1/3 so we can focus on P(H|AI) and P(H|I) - notice these are both probabilities about the host's actions - probabilities that are very relevant to the problem (by the equation above), but also probabilities that most people would not consider to analyse (because probability is taught the way it is)! The former is the probability of the host opening door C given the car is behind door A; the latter is the a-priori probability of the host opening door C given only the information I. The former, P(H|AI), is the most simple: given we know that the car is behind door A what is the probability of the host opening door C. Since we have no information about which door the host opens when the car is behind the door we selected, the principle of indifference applies and we have:
+
+P(H|AI) = P(not H|AI) = 1/2
+
+Now consider P(H|I): the a-priori probability of the host opening door C. Since propositions A, B and C are mutually exclusive and exhaustive, the rules of probability theory imply
+
+P(H | I) = P(H | AI)P(A|I) + P(H | BI)P(B | I) + P(H | CI)P(C | I)
+
+We know that P(H | CI) = 0 because by information I, the host may not open door C if the car is behind door C.  We already figured out P(H | AI) and P(A|I) so the first term is 1/2*1/3 = 1/6. Also we know P(B | I) = 1/3. Now we can focus on P(H | BI): the probability of host opening door C when the car is behind door B and we have chosen door A. But here the rules of the game are clear: the host <strong>must</strong> open door C in this case since he may not open A and may not reveal the car. Hence P(H | BI) = 1. We get:
+
+P(H | I) = 1/6 + 1*1/3 = 3/6 = 1/2.
+
+We now have all the quantities needed to calculate P(A | HI):
+
+P(A | HI) = 1/3 * [(1/2)/(1/2)] = 1/3. Hence P(B | HI) = 2/3 and we should switch doors!
+
+The technique is completely mechanical. I have not used any clever arguments or mathematical ingenuity: only the rules of the game, the principle of indifference and the laws of probability theory. All calculations could be performed by a machine with these inputs.
+
+So where does our intuition go wrong? Two places, I believe. First because of schooling our intuition tells us that somehow we can only reason about "random" events. Instead we should focus on <em>information</em> e.g., 'the car is placed "at random" behind a door' versus "we are given the information that there is a car behind one door and sheep behind the two others." Once we free ourselves to consider probabilities as expressing the information we have available, it is natural that the probabilities change when we obtain more information. This is crucial. The second, I believe, is a consequence of the first: most people seem to identify the following two statements in the Monty Hall problem:
+
+* the host opens door C
+
+* the car is not behind door C
+
+But these two pieces of information are not equivalent when we know the rules of the game (i.e. given our prior information). Considering them equal would violate our commitment to science, to be objective and to consider <em>all</em> the information at hand :-)
+
+To illustrate let us analyse a variant of Monty Hall where "H" means the latter instead.
+
+Given this alternate piece of information, our first step is still to apply Bayes theorem so:
+
+P(A | HI) = P(A|I) P(H | AI)/P(H|I)
+
+We still have P(A|I) = 1/3. P(H|I) is the probability that the car is not behind door C given our initial information. Since H = not C, and since A, B, C are mutually exclusive and exhaustive, the rules of probability theory imply
+
+P(H | I) = P(not C|I) = P(A or B|I) = P(A|I) + P(B|I) = 2/3
+
+Now P(H | AI) is calculated by classical logic: since A implies not C we have P(H | AI) = 1. Hence:
+
+P(A | HI) = 1/3 * 1/[2/3] = 1/2
+
+Which is the false result that most people's intuition prefer. This is the correct conclusion, but for a different game than Monty Hall, namely the game without a host where you simply get an additional information about where the car is not.
+
+Notice that we easily analysed both variants of the game using simple probability theory, and in its interpretation as an extension of classical logic, the intuition follows along nicely. The key is to use <em>all the information at hand</em>, not discarding any information that could be of relevance to the problem (i.e. we got the information that host selected C, not that door C had a sheep behind it). 

@@ -1,0 +1,237 @@
+---
+layout: post
+title: JavaScript parasitic inheritance, power constructors and instanceof.
+tags:
+- instanceof
+- parasitic inheritance
+- power constructors
+status: publish
+type: post
+published: true
+meta:
+  blogger_blog: higher-order.blogspot.com
+  blogger_author: krukowhttp://www.blogger.com/profile/02045796732071392830noreply@blogger.com
+  blogger_permalink: /2008/02/javascript-parasitic-inheritance-super.html
+  _edit_last: '1'
+---
+<span style="font-weight: bold;">Abstract</span>. This posting shows how one can make Crockford's power constructor functions play nicely with the JavaScript keyword 'instanceof.'
+
+[<em>update: March 18, 2008.</em> I asked Crockford what he thinks about this pattern, and he actually discourages the use of 'instanceof' -- instead, he prefers to "... rely instead on good design and polymorphism."]
+
+The inheritance model of JavaScript is based on a combination of the 'new' keyword and the prototype property of (constructor) functions. JavaScript Guru Douglas Crockford (aka 'Yoda') argues that this model (which he calls pseudo-classical) is awkward. Instead, he proposes an elegant, powerful and simple model (parasitic inheritance), using so-called power constructor functions. Note, familiarity with the above concepts is necessary for complete understanding of this post [and something that every web developer should know anyway ;-)].
+
+The advantages of power constructor functions include support for private, shared and public variables as well as simplicty (avoiding new and prototype). There is a mismatch, however, between constructors and the JavaScript keyword, <span style="font-family: courier new;">instanceof</span>. Consider the following example:
+<pre><tt><span class="comment">//recall that the object function creates a new object which has</span>
+<span class="comment">//the input object, o, as its prototype</span>
+<span class="keyword">var</span><span class="normal"> object </span><span class="symbol">=</span><span class="normal"> </span><span class="symbol">(</span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">     </span><span class="keyword">function</span><span class="normal"> </span><span class="function">F</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{}</span>
+<span class="normal">     </span><span class="keyword">return</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">o</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">         F</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="normal"> </span><span class="symbol">=</span><span class="normal"> o</span><span class="symbol">;</span>
+<span class="normal">         </span><span class="keyword">return</span><span class="normal"> </span><span class="keyword">new</span><span class="normal"> </span><span class="function">F</span><span class="symbol">();</span>
+<span class="normal">     </span><span class="cbracket">}</span><span class="symbol">;</span>
+<span class="cbracket">}</span><span class="symbol">)();</span><span class="comment">//included for completeness.</span>
+<span class="keyword">var</span><span class="normal"> OriginalPerson </span><span class="symbol">=</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">   sayHello</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span>
+<span class="normal">      </span><span class="keyword">return</span><span class="normal"> </span><span class="string">"Hello, my name is "</span><span class="symbol">+</span><span class="keyword">this</span><span class="symbol">.</span><span class="function">getName</span><span class="symbol">();</span>
+<span class="normal">   </span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">   getName</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span><span class="keyword">return</span><span class="normal"> </span><span class="string">'Adam'</span><span class="symbol">;</span><span class="cbracket">}</span>
+<span class="cbracket">}</span><span class="symbol">;</span>
+
+<span class="keyword">function</span><span class="normal"> </span><span class="function">Person</span><span class="symbol">(</span><span class="normal">name</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">  </span><span class="keyword">var</span><span class="normal"> p </span><span class="symbol">=</span><span class="normal"> </span><span class="function">object</span><span class="symbol">(</span><span class="normal">OriginalPerson</span><span class="symbol">);</span>
+<span class="normal">  p</span><span class="symbol">.</span><span class="normal">getName </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span><span class="keyword">return</span><span class="normal"> name</span><span class="symbol">;</span><span class="cbracket">}</span><span class="symbol">;</span>
+<span class="normal">  </span><span class="keyword">return</span><span class="normal"> p</span><span class="symbol">;</span>
+<span class="cbracket">}</span>
+
+<span class="keyword">function</span><span class="normal"> </span><span class="function">Guru</span><span class="symbol">(</span><span class="normal">name</span><span class="symbol">,</span><span class="normal">topic</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">  </span><span class="keyword">var</span><span class="normal"> g </span><span class="symbol">=</span><span class="normal"> </span><span class="function">object</span><span class="symbol">(</span><span class="function">Person</span><span class="symbol">(</span><span class="normal">name</span><span class="symbol">));</span><span class="comment">//Technically we don't need object(.) here</span>
+<span class="normal">  g</span><span class="symbol">.</span><span class="normal">getTopic </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span><span class="keyword">return</span><span class="normal"> topic</span><span class="symbol">;</span><span class="cbracket">}</span><span class="symbol">;</span>
+<span class="normal">  </span><span class="keyword">return</span><span class="normal"> g</span><span class="symbol">;</span>
+<span class="cbracket">}</span>
+
+<span class="keyword">var</span><span class="normal"> karl </span><span class="symbol">=</span><span class="normal"> </span><span class="function">Person</span><span class="symbol">(</span><span class="string">'Karl'</span><span class="symbol">);</span>
+<span class="keyword">var</span><span class="normal"> crockford </span><span class="symbol">=</span><span class="normal"> </span><span class="function">Guru</span><span class="symbol">(</span><span class="string">'Douglas'</span><span class="symbol">,</span><span class="string">'JavaScript'</span><span class="symbol">);</span>
+
+<span class="normal">karl </span><span class="keyword">instanceof</span><span class="normal"> Person</span><span class="symbol">;</span><span class="comment">//&amp;lt;- false </span>
+<span class="normal">crockford </span><span class="keyword">instanceof</span><span class="normal"> Guru</span><span class="symbol">;</span><span class="comment">//&amp;lt;- false</span>
+</tt></pre>
+
+Hmm... Clearly, any environment that makes <span style="font-family: courier new;">crockford instanceof Guru</span> evaluate to <span style="font-family: courier new;">false</span> must be getting something wrong!
+
+In general, one has to do <span style="font-style:italic;">something</span> to make super-constructors work with <span style="font-family: courier new;">instanceof</span>. The expression <span style="font-family: courier new;">exp1 instanceof exp2</span> where <span style="font-family: courier new;">exp1,exp2</span> are JS expressions (<span style="font-family: courier new;">exp2</span> must evaluate to a function and <span style="font-family: courier new;">exp1</span> should evaluate to an object) works with following semantics:
+
+First <span style="font-family: courier new;">exp1</span> is evaluated, say, to <span style="font-family: courier new;">o</span> then
+<span style="font-family: courier new;">exp2</span> is evaluated, say, to <span style="font-family: courier new;">f</span>. If <span style="font-family: courier new;">o</span> is an object and <span style="font-family: courier new;">f</span> is a function, the entire expression evaluates to true only if following <span style="font-family: courier new;">o</span>'s [[prototype]] chain, we can reach <span style="font-family: courier new;">f.prototype</span>.
+
+This means that to make this work, we must ensure that the object created has <span style="font-family: courier new;">Person.prototype</span> or <span style="font-family: courier new;">Guru.prototype</span> in its prototype chain.
+
+What I would really like to end up with at the end of this blog entry, is to be able to write code similar to:
+<pre><tt><span class="keyword">var</span><span class="normal"> OriginalPerson </span><span class="symbol">=</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">   sayHello</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span>
+<span class="normal">      </span><span class="keyword">return</span><span class="normal"> </span><span class="string">"Hello, my name is "</span><span class="symbol">+</span><span class="keyword">this</span><span class="symbol">.</span><span class="function">getName</span><span class="symbol">();</span>
+<span class="normal">   </span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">   getName</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span><span class="keyword">return</span><span class="normal"> </span><span class="string">'Adam'</span><span class="symbol">;</span><span class="cbracket">}</span>
+<span class="cbracket">}</span><span class="symbol">;</span>
+
+<span class="keyword">var</span><span class="normal"> Person </span><span class="symbol">=</span><span class="normal"> OriginalPerson</span><span class="symbol">.</span><span class="function">parasite</span><span class="symbol">(</span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">Host</span><span class="symbol">,</span><span class="normal">name</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">  </span><span class="keyword">var</span><span class="normal"> p </span><span class="symbol">=</span><span class="normal"> </span><span class="function">object</span><span class="symbol">(</span><span class="function">Host</span><span class="symbol">());</span>
+<span class="normal">  p</span><span class="symbol">.</span><span class="normal">getName </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span><span class="keyword">return</span><span class="normal"> name</span><span class="symbol">;</span><span class="cbracket">}</span><span class="symbol">;</span>
+<span class="normal">  </span><span class="keyword">return</span><span class="normal"> p</span><span class="symbol">;</span>
+<span class="cbracket">}</span><span class="symbol">);</span>
+
+<span class="keyword">var</span><span class="normal"> Guru </span><span class="symbol">=</span><span class="normal"> Person</span><span class="symbol">.</span><span class="function">parasite</span><span class="symbol">(</span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">Host</span><span class="symbol">,</span><span class="normal"> name</span><span class="symbol">,</span><span class="normal">topic</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">  </span><span class="keyword">var</span><span class="normal"> g </span><span class="symbol">=</span><span class="normal"> </span><span class="function">object</span><span class="symbol">(</span><span class="function">Host</span><span class="symbol">(</span><span class="normal">name</span><span class="symbol">));</span>
+<span class="normal">  g</span><span class="symbol">.</span><span class="normal">getTopic </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span><span class="keyword">return</span><span class="normal"> topic</span><span class="symbol">;</span><span class="cbracket">}</span><span class="symbol">;</span>
+<span class="normal">  </span><span class="keyword">return</span><span class="normal"> g</span><span class="symbol">;</span>
+<span class="cbracket">}</span><span class="symbol">);</span>
+
+<span class="function">Guru</span><span class="symbol">(</span><span class="string">'Douglas Crockford'</span><span class="symbol">,</span><span class="string">'JavaScript'</span><span class="symbol">)</span><span class="normal"> </span><span class="keyword">instanceof</span><span class="normal"> Guru</span><span class="symbol">;</span><span class="comment">//&amp;lt;-- true </span>
+<span class="function">Guru</span><span class="symbol">(</span><span class="string">'Douglas Crockford'</span><span class="symbol">,</span><span class="string">'JavaScript'</span><span class="symbol">)</span><span class="normal"> </span><span class="keyword">instanceof</span><span class="normal"> Person</span><span class="symbol">;</span><span class="comment">//&amp;lt;-- true</span>
+</tt></pre>
+
+The extra parameter <span style="font-family: courier new;">Host</span> is supposed to represent the "Host" of the parasite (i.e., Person in the case of Guru), the idea being that the <span style="font-family: courier new;">parasite</span> function will somehow 'wrap' the <span style="font-family: courier new;">Person</span> function to set it up so that 'instanceof' works, and then finally feed this wrapped function to the parasite (via the Host variable). I won't be able to write the code exactly as above, but we will get close... Anyway, hopefully this will make more sense very soon!
+
+<span style="font-weight:bold;">We will get there in two steps</span>. First we code it up manually (so to speak) and secondly we will do the meta-programming with <span style="font-family: courier new;">parasite</span>.
+
+Incidentally, we can exploit Crockford's 'shared secrets' technique to get the prototype chain working. Consider the following code.
+<pre><tt><span class="keyword">function</span><span class="normal"> </span><span class="function">Person</span><span class="symbol">(</span><span class="normal">name</span><span class="symbol">,</span><span class="normal"> proto</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">  </span><span class="keyword">var</span><span class="normal"> p </span><span class="symbol">=</span><span class="normal"> </span><span class="function">object</span><span class="symbol">(</span><span class="normal">proto </span><span class="symbol">||</span><span class="normal"> Person</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">);</span>
+<span class="normal">  p</span><span class="symbol">.</span><span class="normal">getName </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span><span class="keyword">return</span><span class="normal"> name</span><span class="symbol">;</span><span class="cbracket">}</span><span class="symbol">;</span>
+<span class="normal">  </span><span class="keyword">return</span><span class="normal"> p</span><span class="symbol">;</span>
+<span class="cbracket">}</span>
+<span class="normal">Person</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="normal"> </span><span class="symbol">=</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">   sayHello</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span>
+<span class="normal">      </span><span class="keyword">return</span><span class="normal"> </span><span class="string">"Hello, my name is "</span><span class="symbol">+</span><span class="keyword">this</span><span class="symbol">.</span><span class="function">getName</span><span class="symbol">();</span>
+<span class="normal">   </span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">   getName</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span><span class="keyword">return</span><span class="normal"> </span><span class="string">'Adam'</span><span class="symbol">;</span><span class="cbracket">}</span>
+<span class="cbracket">}</span><span class="symbol">;</span>
+<span class="function">Person</span><span class="symbol">(</span><span class="string">'Karl'</span><span class="symbol">)</span><span class="normal"> </span><span class="keyword">instanceof</span><span class="normal"> Person</span><span class="symbol">;</span><span class="comment">//&amp;lt;-- true</span>
+</tt></pre>
+
+The key here is the statement: <span style="font-family: courier new;">object(proto || Person.prototype)</span>. This ensures that the object created has <span style="font-family: courier new;">Person.prototype</span> in its [[prototype]] chain. The <span style="font-family: courier new;">proto ||</span>-part is intended to be used as a 'shared secret' between a parasite 'sub type'/'sub power constructor'; the invariant is that <span style="font-family: courier new;">proto || Person.prototype</span> will always denote an object which is <span style="font-family: courier new;">Person.prototype</span> or has it in its prototype chain. It can be used as follows:
+<pre><tt><span class="keyword">function</span><span class="normal"> </span><span class="function">Guru</span><span class="symbol">(</span><span class="normal">name</span><span class="symbol">,</span><span class="normal">topic</span><span class="symbol">,</span><span class="normal">proto</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">  </span><span class="keyword">var</span><span class="normal"> g </span><span class="symbol">=</span><span class="normal"> </span><span class="function">object</span><span class="symbol">(</span><span class="function">Person</span><span class="symbol">(</span><span class="normal">name</span><span class="symbol">,</span><span class="normal"> proto </span><span class="symbol">||</span><span class="normal"> Guru</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">));</span>
+<span class="normal">  g</span><span class="symbol">.</span><span class="normal">getTopic </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span><span class="keyword">return</span><span class="normal"> topic</span><span class="symbol">;</span><span class="cbracket">}</span><span class="symbol">;</span>
+<span class="normal">  </span><span class="keyword">return</span><span class="normal"> g</span><span class="symbol">;</span>
+<span class="cbracket">}</span>
+<span class="normal">Guru</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="normal"> </span><span class="symbol">=</span><span class="normal"> </span><span class="function">object</span><span class="symbol">(</span><span class="normal">Person</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">);</span>
+<span class="function">Guru</span><span class="symbol">(</span><span class="string">'Douglas Crockford'</span><span class="symbol">,</span><span class="string">'JavaScript'</span><span class="symbol">)</span><span class="normal"> </span><span class="keyword">instanceof</span><span class="normal"> Guru</span><span class="symbol">;</span><span class="comment">//&amp;lt;-- true</span>
+<span class="function">Guru</span><span class="symbol">(</span><span class="string">'Douglas Crockford'</span><span class="symbol">,</span><span class="string">'JavaScript'</span><span class="symbol">)</span><span class="normal"> </span><span class="keyword">instanceof</span><span class="normal"> Person</span><span class="symbol">;</span><span class="comment">//&amp;lt;-- true</span>
+</tt></pre>
+
+Actually, I feel some pleasure in the assignments:
+<pre><tt><span class="normal">Person</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="normal"> </span><span class="symbol">=</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">   sayHello</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span>
+<span class="normal">      </span><span class="keyword">return</span><span class="normal"> </span><span class="string">"Hello, my name is "</span><span class="symbol">+</span><span class="keyword">this</span><span class="symbol">.</span><span class="function">getName</span><span class="symbol">();</span>
+<span class="normal">   </span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">   getName</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span><span class="keyword">return</span><span class="normal"> </span><span class="string">'Adam'</span><span class="symbol">;</span><span class="cbracket">}</span>
+<span class="cbracket">}</span><span class="symbol">;</span>
+</tt></pre>
+
+and <span style="font-family: courier new;">Guru.prototype = object(Person.prototype);</span>: Intutively, these objects are the 'prototypes' of the objects created by the power constructors, so it feels natural to make this assignment.
+
+So far so good - we have instanceof working with power-constructors, but we can do better. The problem now is to do the meta-programming that will handle the 'secret-sharing' behind the scenes.
+
+In this example, we will enhance <span style="font-family: courier new;">Object.prototype</span> and <span style="font-family: courier new;">Function.prototype</span>. For simplicity I've introduced the constraint that all power-constructor functions should take only one argument [however, I'm convinced this can be generalized to more than one argument].
+
+<strong>Note, slightly off topic here...</strong>
+In either case, I've developed at taste for single-argument functions. Consider:
+<pre><tt><span class="comment">/** power-constructer for Guru objects </span>
+<span class="comment">  *</span><span class="type">@param</span><span class="comment"> conf {Object} a configuration object with properties:</span>
+<span class="comment">  * name and topic</span>
+<span class="comment">  * </span><span class="type">@return</span><span class="comment"> a Guru object with name: conf.name and topic: conf.topic.</span>
+<span class="comment">  */</span>
+<span class="keyword">function</span><span class="normal"> </span><span class="function">Guru</span><span class="symbol">(</span><span class="normal">conf</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal">  </span><span class="keyword">var</span><span class="normal"> g </span><span class="symbol">=</span><span class="normal"> </span><span class="function">object</span><span class="symbol">(</span><span class="function">Person</span><span class="symbol">(</span><span class="normal">conf</span><span class="symbol">)),</span>
+<span class="normal">      t </span><span class="symbol">=</span><span class="normal"> conf</span><span class="symbol">.</span><span class="normal">topic </span><span class="symbol">||</span><span class="normal"> </span><span class="string">'none'</span><span class="symbol">;</span>
+<span class="normal">  g</span><span class="symbol">.</span><span class="normal">getTopic </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span><span class="keyword">return</span><span class="normal"> t</span><span class="symbol">;</span><span class="cbracket">}</span><span class="symbol">;</span>
+<span class="normal">  </span><span class="keyword">return</span><span class="normal"> g</span><span class="symbol">;</span>
+<span class="cbracket">}</span>
+<span class="function">Guru</span><span class="symbol">(</span><span class="cbracket">{</span><span class="normal">name</span><span class="symbol">:</span><span class="string">'Yoda'</span><span class="symbol">,</span><span class="normal"> topic</span><span class="symbol">:</span><span class="string">'JavaScript'</span><span class="cbracket">}</span><span class="symbol">);</span>
+</tt></pre>
+
+The disadvantage is that there is slightly more code to write. The advantages are (1) readability: <span style="font-family: courier new;">Guru({name:'Yoda', topic:'JavaScript'})</span> can be read without having to consult the constructor function about which argument is the name and which is the topic; (2) optional/default arguments: you can leave out either of the arguments: <span style="font-family: courier new;">Guru({name:'Yoda'})</span> or <span style="font-family: courier new;">Guru({topic:'JavaScript'})</span> are both valid (in the multiple arg constructor with name as the first parameter, you'd have to write <span style="font-family: courier new;">Guru('Yoda')</span> (which is fine), and <span style="font-family: courier new;">Guru(undefined,'JavaScript')</span> (which is not).
+
+<strong>Back on track</strong>
+The following is my implementation. I extend <span style="font-family: courier new;">Object.prototype</span> and <span style="font-family: courier new;">Function.prototype</span> so that we can write:
+<pre><tt><span class="keyword">var</span><span class="normal"> OriginalPerson </span><span class="symbol">=</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">   sayHello</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span>
+<span class="normal">      </span><span class="keyword">return</span><span class="normal"> </span><span class="string">"Hello, my name is "</span><span class="symbol">+</span><span class="keyword">this</span><span class="symbol">.</span><span class="function">getName</span><span class="symbol">();</span>
+<span class="normal">   </span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">   getName</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span><span class="keyword">return</span><span class="normal"> </span><span class="string">'Adam'</span><span class="symbol">;</span><span class="cbracket">}</span>
+<span class="cbracket">}</span><span class="symbol">;</span>
+
+<span class="keyword">var</span><span class="normal"> Person </span><span class="symbol">=</span><span class="normal"> OriginalPerson</span><span class="symbol">.</span><span class="function">parasite</span><span class="symbol">(</span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">Host</span><span class="symbol">,</span><span class="normal"> conf</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">  </span><span class="keyword">var</span><span class="normal"> p </span><span class="symbol">=</span><span class="normal"> </span><span class="function">object</span><span class="symbol">(</span><span class="function">Host</span><span class="symbol">()),</span>
+<span class="normal">      name </span><span class="symbol">=</span><span class="normal"> conf</span><span class="symbol">.</span><span class="normal">name </span><span class="symbol">||</span><span class="normal"> </span><span class="string">'Anonymous'</span><span class="symbol">;</span>
+<span class="normal">  p</span><span class="symbol">.</span><span class="normal">getName </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span><span class="keyword">return</span><span class="normal"> name</span><span class="symbol">;</span><span class="cbracket">}</span><span class="symbol">;</span>
+<span class="normal">  </span><span class="keyword">return</span><span class="normal"> p</span><span class="symbol">;</span>
+<span class="cbracket">}</span><span class="symbol">);</span>
+
+<span class="keyword">var</span><span class="normal"> Guru </span><span class="symbol">=</span><span class="normal"> Person</span><span class="symbol">.</span><span class="function">parasite</span><span class="symbol">(</span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">Host</span><span class="symbol">,</span><span class="normal"> conf</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">  </span><span class="keyword">var</span><span class="normal"> g </span><span class="symbol">=</span><span class="normal"> </span><span class="function">object</span><span class="symbol">(</span><span class="function">Host</span><span class="symbol">(</span><span class="normal">conf</span><span class="symbol">)),</span>
+<span class="normal">      topic </span><span class="symbol">=</span><span class="normal"> conf</span><span class="symbol">.</span><span class="normal">topic </span><span class="symbol">||</span><span class="normal"> </span><span class="string">'none'</span><span class="symbol">;</span>
+<span class="normal">  g</span><span class="symbol">.</span><span class="normal">getTopic </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span><span class="keyword">return</span><span class="normal"> topic</span><span class="symbol">;</span><span class="cbracket">}</span>
+<span class="normal">  </span><span class="keyword">return</span><span class="normal"> g</span><span class="symbol">;</span>
+<span class="cbracket">}</span><span class="symbol">);</span>
+<span class="keyword">var</span><span class="normal"> h </span><span class="symbol">=</span><span class="normal"> </span><span class="function">Guru</span><span class="symbol">(</span><span class="cbracket">{</span>
+<span class="normal"> name</span><span class="symbol">:</span><span class="normal"> </span><span class="string">'Douglas Crockford'</span><span class="symbol">,</span>
+<span class="normal"> topic</span><span class="symbol">:</span><span class="normal"> </span><span class="string">'JavaScript'</span>
+<span class="cbracket">}</span><span class="symbol">);</span>
+<span class="normal">h </span><span class="keyword">instanceof</span><span class="normal"> Guru</span><span class="symbol">;</span><span class="comment">//&lt;-- true</span>
+<span class="normal">h </span><span class="keyword">instanceof</span><span class="normal"> Person</span><span class="symbol">;</span><span class="comment">//&lt;-- true</span>
+</tt></pre>
+
+I've implemented it as follows (with comments):
+<pre><tt><span class="normal">Object</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">.</span><span class="normal">parasite </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">parasite</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal">    </span><span class="comment">/* This is the function returned as the result</span>
+<span class="comment">       of this call; it represents a wrapper for the</span>
+<span class="comment">       function in parameter parasite. wrapper will simply</span>
+<span class="comment">       call the parasite function, but supplying a Host function</span>
+<span class="comment">       as the first argument. If wrapper is called with proto === undefined</span>
+<span class="comment">       then the Host function will create an object with its prototype === this,</span>
+<span class="comment">       otherwise an object with prototype === proto is created (this lets</span>
+<span class="comment">       sub-parasites supply the proto parameter).</span>
+<span class="comment">    */</span>
+<span class="normal">    </span><span class="keyword">function</span><span class="normal"> </span><span class="function">wrapper</span><span class="symbol">(</span><span class="normal">conf</span><span class="symbol">,</span><span class="normal">proto</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="keyword">var</span><span class="normal"> p </span><span class="symbol">=</span><span class="normal"> proto</span><span class="symbol">;</span><span class="comment">//Exercise why is this necessary?</span>
+<span class="normal">        Array</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">.</span><span class="normal">splice</span><span class="symbol">.</span><span class="function">call</span><span class="symbol">(</span><span class="normal">arguments</span><span class="symbol">,</span><span class="number">0</span><span class="symbol">,</span><span class="number">0</span><span class="symbol">,</span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span>
+<span class="normal">           </span><span class="keyword">return</span><span class="normal"> </span><span class="function">object</span><span class="symbol">(</span><span class="normal">p </span><span class="symbol">||</span><span class="normal"> wrapper</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="cbracket">}</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="keyword">return</span><span class="normal"> parasite</span><span class="symbol">.</span><span class="function">apply</span><span class="symbol">(</span><span class="keyword">this</span><span class="symbol">,</span><span class="normal"> arguments</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="cbracket">}</span>
+<span class="normal">    </span><span class="comment">/* it is important that wrapper.prototype is set to this object, both so that</span>
+<span class="comment">       o instanceof wrapper works, and so that objects created with</span>
+<span class="comment">       object(p || wrapper.prototype) above will inherit properties of this */</span>
+<span class="normal">    wrapper</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="normal"> </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">this</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="keyword">return</span><span class="normal"> wrapper</span><span class="symbol">;</span>
+<span class="cbracket">}</span><span class="symbol">;</span>
+<span class="normal">Function</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">.</span><span class="normal">parasite </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">parasite</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">    </span><span class="keyword">var</span><span class="normal"> host_cons </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">this</span><span class="symbol">;</span><span class="comment">//the constructor function for the host of parasite</span>
+
+<span class="normal">    </span><span class="comment">/* Again, this function is the result of the computation. </span>
+<span class="comment">       When called it splices a Host function on the 0'th pos in the arguments array.</span>
+<span class="comment">       The Host function will call the host_cons and (important!) supplies an </span>
+<span class="comment">       additional last argument (proto). If proto === undefined we are in the case</span>
+<span class="comment">       where client code is calling wrapper, so we call the host_cons function</span>
+<span class="comment">       supplying wrapper.prototype; if instead proto is provided we call host_cons</span>
+<span class="comment">       with this object (this is the case where wrapper is called by a sub-parasite).</span>
+<span class="comment">    */</span>
+<span class="normal">    </span><span class="keyword">function</span><span class="normal"> </span><span class="function">wrapper</span><span class="symbol">(</span><span class="normal">conf</span><span class="symbol">,</span><span class="normal">proto</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">         </span><span class="keyword">var</span><span class="normal"> wrapper_this </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">this</span><span class="symbol">,</span>
+<span class="normal">             p </span><span class="symbol">=</span><span class="normal"> proto</span><span class="symbol">;</span><span class="comment">//exercise: why?</span>
+<span class="normal">         Array</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">.</span><span class="normal">splice</span><span class="symbol">.</span><span class="function">call</span><span class="symbol">(</span><span class="normal">arguments</span><span class="symbol">,</span><span class="number">0</span><span class="symbol">,</span><span class="number">0</span><span class="symbol">,</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">              Array</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">.</span><span class="normal">splice</span><span class="symbol">.</span><span class="function">call</span><span class="symbol">(</span><span class="normal">arguments</span><span class="symbol">,</span><span class="normal">arguments</span><span class="symbol">.</span><span class="normal">length</span><span class="symbol">,</span><span class="number">0</span><span class="symbol">,</span><span class="normal"> </span>
+<span class="normal">                                              p </span><span class="symbol">||</span><span class="normal"> wrapper</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">);</span>
+<span class="normal">              </span><span class="keyword">return</span><span class="normal"> host_cons</span><span class="symbol">.</span><span class="function">apply</span><span class="symbol">(</span><span class="normal">wrapper_this</span><span class="symbol">,</span><span class="normal">arguments</span><span class="symbol">);</span><span class="normal"> </span>
+<span class="normal">         </span><span class="cbracket">}</span><span class="symbol">);</span>
+<span class="normal">         </span><span class="keyword">return</span><span class="normal"> parasite</span><span class="symbol">.</span><span class="function">apply</span><span class="symbol">(</span><span class="keyword">this</span><span class="symbol">,</span><span class="normal"> arguments</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="cbracket">}</span>
+<span class="normal">    </span><span class="comment">/* our prototype is an object which inherits properties from this.prototype,</span>
+<span class="comment">       e.g., Guru.prototype inherits from Person.prototype.</span>
+<span class="comment">    */</span>
+<span class="normal">    wrapper</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="normal"> </span><span class="symbol">=</span><span class="normal"> </span><span class="function">object</span><span class="symbol">(</span><span class="keyword">this</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="keyword">return</span><span class="normal"> wrapper</span><span class="symbol">;</span>
+<span class="cbracket">}</span><span class="symbol">;</span>
+</tt></pre>
+ 

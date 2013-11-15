@@ -1,0 +1,166 @@
+---
+layout: post
+title: 'Circuit Breaker: a small but real-life example of Clojure protocols and datatype'
+tags:
+- circuit breaker
+- Clojure
+- Michael Nygard
+- stability pattern
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+---
+(Update July 2nd 2010: 
+I've cleaned up the code and git repo.
+Inlined the protocol function definitions in the state records for native-platform speed. 
+The policy can now specify which exceptions should be considered errors: this is really useful in real life when you don't want to trip the circuit breaker say on security exceptions.
+Now builds with lein 1.1.0.
+...]$ lein jar
+...
+...]$ javac -cp lib/clojure-1.2.0-master-20100623.220259-87.jar:circuit-breaker.jar src/C.java 
+...]$ java -cp lib/clojure-1.2.0-master-20100623.220259-87.jar:circuit-breaker.jar:src C
+)
+
+
+Michael Nygards <a href="http://www.pragprog.com/titles/mnee/release-it">stability pattern "Circuit Breaker" </a>is useful for failing fast when calling integration points that are unstable (which is every integration point I've ever dealt with!). This is done by detecting when integration points fail, and subsequently cutting off access for a time-period. Use the circuit breaker to
+
+<blockquote>... preserve request handling threads in the calling system. Very often, when you make a call to an external integration point that's broken, it will tie up a thread in a blocking synchronous call for an indefinite period of time. [<a href="http://www.infoq.com/interviews/Building-Resilient-Systems-Michael-Nygard">Michael Nygard, QCon interview</a>]</blockquote>
+
+I've written a <a href="http://github.com/krukow/clojure-circuit-breaker">fast, non-blocking functional implementation of the Circuit Breaker</a> in the 1.2 branch of Clojure which will be released <a href="http://groups.google.com/group/clojure/browse_thread/thread/bdf0e8500ec11aa">shortly</a>. It uses the new Clojure constructs <a href="http://www.clojure.org/protocols"><strong>protocols</strong></a> and <a href="http://clojure.org/datatypes"><strong>datatypes</strong></a> for modeling states, for interop and to obtain platform-speed polymorphic calls. 
+
+The implementation exposes a simple Java interface which makes it usable from Java, Scala, JRuby et al. 
+
+<strong>Why?</strong>
+<blockquote>Design Patterns are a disease, and Clojure is the cure. :-) (the smiley is mine!) <br/>[<a href="http://www.nofluffjuststuff.com/blog/stuart_halloway/2009/10/the_case_for_clojure">http://www.nofluffjuststuff.com/blog/stuart_halloway/2009/10/the_case_for_clojure</a>]</blockquote> 
+
+I believe this implementation has a couple of advantages compared to these <a href="http://www.jroller.com/kenwdelong/entry/circuit_breaker_in_java">Java</a> and <a href="http://github.com/FaKod/Circuit-Breaker-for-Scala">Scala</a> implementations that use the GoF "State Machine" pattern. 
+
+First, I find the functional version simpler (see examples below). Second, this version guarantees that only a single call is made to the integration point when the circuit breaker decides to re-test if it is working again (the other versions seem to allow an unbounded number of calls if more threads concurrently try to access the integration point calling "invoke"). Finally, this version encapsulates the (immutable) state in a single Clojure atom (corresponding to a Java AtomicReference), whereas the GoF implementations use at least three atomics for various counters. Why does that matter? Well, it gives you the ability to obtain a consistent (immutable) snapshot of the state of circuit breaker at any given time which can be used to e.g. logging and analysis - this isn't possible when you have several atomics in play.
+
+These benefits come naturally from following Clojure's programming model and concurrency constructs. Let me illustrate the Clojure features that I've found useful for this problem.
+
+<strong>Protocols and records</strong>. 
+I'm using pure polymorphic functions <tt>on-success</tt>, <tt>on-error</tt>, <tt>on-before-call</tt> as transition functions mapping a state to the next state for an event (successfull call, error call and before a call is initiated). A pure function <tt>proceed</tt> is a predicate on states that decide whether or not the state allows calls to go though to the integration point. 
+
+Together these functions form <a href="http://clojure.org/protocols">a Clojure protocol</a> (which is similar to a Java interface, but has additional benefits).
+
+<script src="http://gist.github.com/390485.js?file=states-part-1.clj"></script> (Show with JavaScript: for non-JS User agents, see <a href="http://gist.github.com/390485">http://gist.github.com/390485</a>)
+
+Apart from the definition of the protocol, we define a default implementation of the protocol functions that our states can use. The default transition functions are simply the identity function and proceed defaults to false.
+
+We now define datatypes corresponding to each type of state: closed (calls go through, count failures), open (calls fail-fast, stores a time-stamp when IP failed), initial-half-open (a single call goes through), pending-half-open (waiting for a probing call to return).  The datatypes are parameterized by a "transition policy" defining how many failures are "needed" to transition to the open state, and how long to wait in the open state.
+
+<script src="http://gist.github.com/390492.js?file=states-datatypes.clj"></script>(For non-JS User agents, see <a href="http://gist.github.com/390492">http://gist.github.com/390492</a> )
+
+This simply defines the states as datatypes. Note that we use <tt>defrecord</tt> not <tt>deftype</tt>. This makes our  datatypes work like persistent clojure maps which is extremely useful - for example our states can be destructured (see, e.g. <tt>defrecord</tt> at <a href="http://clojure.org/datatypes">http://clojure.org/datatypes</a>).
+
+We can make our new types participate in our <tt>CircuitBreakerTransitions</tt> protocol
+
+<script src="http://gist.github.com/390494.js?file=states-extend-closed.clj"></script> (<a href="http://gist.github.com/390494">http://gist.github.com/390494</a>)
+
+A couple of notes: 
+
+- We use <tt>merge</tt> to take the default implementations and "override" with the implementations given (this would correspond to an abstract super-class in Java but is more flexible).
+- We use destructing in the function definitions for easy access to the "ClosedState" data, e.g., in the body of <tt>(fn [{f :fail-count p :policy, :as s}] ... </tt> the states fail-count is available as <tt>f</tt> and similarly for the policy. The <tt>:as s</tt> clause makes the state itself available as <tt>s</tt>.
+- Finally, we can construct new instances of the states since they are simple dynamically compiled classes, e.g., <tt>(ClosedState. p 0)</tt> creates the initial state with a policy <tt>p</tt>.
+
+<strong>Pure functions</strong>. A clear advantage of the functional approach is the ease of testing. Consider this simple test of some states and transition functions.
+
+<script src="http://gist.github.com/390505.js?file=states-test.clj"></script> (<a href="http://gist.github.com/390505">http://gist.github.com/390505</a>)
+
+This is the core of the circuit breaker itself:
+
+<script src="http://gist.github.com/390529.js?file=circuit-breaker-wrap.clj"></script> (<a href="http://gist.github.com/390529">http://gist.github.com/390529</a>)
+
+A circuit breaker is simply an atomic reference to a state. The function <tt>wrap-with</tt> takes a function, <tt>f</tt> to wrap - this represents a function that will call an integration point, and a circuit breaker, named <tt>state</tt>. It then returns a "wrapped" function which is guarded by the circuit breaker. It uses the "<tt>transition-by!</tt>" function which makes a state-transition from the current state. 
+
+An example usage:
+
+<script src="http://gist.github.com/390535.js?file=circuit-breaker-test.clj"></script> (<a href="http://gist.github.com/390535">http://gist.github.com/390535</a>)
+
+Notice that the snapshot of the state is available simply with a <tt>deref</tt>, e.g., as <tt>@cb</tt>.
+
+<h3>A Java-interface</h3>
+To expose the functionality to Java I have used Clojures <tt>gen-class</tt> to create a class that exposes two methods given by this protocol which lets you wrap a function and look at the state:
+
+<code><tt>
+(defprotocol CircuitBreaker
+  (#^clojure.lang.IFn wrap [this #^clojure.lang.IFn fn])
+  (#^net.higher_order.integration.circuit_breaker.states.CircuitBreakerTransitions current-state [this]))
+ </tt></code>
+
+Then using <tt>gen-class</tt> I generate a class that implements the interface corresponding to that protocol. This gives the possibility of using the circuit breaker from Java:
+
+<pre><tt><span class="preproc">import</span><span class="normal"> clojure</span><span class="symbol">.</span><span class="normal">lang</span><span class="symbol">.</span><span class="normal">IFn</span><span class="symbol">;</span>
+<span class="preproc">import</span><span class="normal"> clojure</span><span class="symbol">.</span><span class="normal">lang</span><span class="symbol">.</span><span class="normal">RT</span><span class="symbol">;</span>
+<span class="preproc">import</span><span class="normal"> net</span><span class="symbol">.</span><span class="normal">higher_order</span><span class="symbol">.</span><span class="normal">integration</span><span class="symbol">.</span><span class="normal">circuit_breaker</span><span class="symbol">.</span><span class="normal">AtomicCircuitBreaker</span><span class="symbol">;</span>
+<span class="preproc">import</span><span class="normal"> net</span><span class="symbol">.</span><span class="normal">higher_order</span><span class="symbol">.</span><span class="normal">integration</span><span class="symbol">.</span><span class="normal">circuit_breaker</span><span class="symbol">.</span><span class="normal">CircuitBreaker</span><span class="symbol">;</span>
+
+<span class="keyword">public</span><span class="normal"> </span><span class="keyword">class</span><span class="normal"> </span><span class="classname">C</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">	</span><span class="keyword">public</span><span class="normal"> </span><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span><span class="normal"> </span><span class="function">main</span><span class="symbol">(</span><span class="normal">String</span><span class="symbol">[]</span><span class="normal"> args</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">		CircuitBreaker atomicCircuitBreaker </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">new</span><span class="normal"> </span><span class="function">AtomicCircuitBreaker</span><span class="symbol">();</span>
+<span class="normal">		IFn wrap </span><span class="symbol">=</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">IFn</span><span class="symbol">)</span><span class="normal"> atomicCircuitBreaker</span><span class="symbol">.</span><span class="function">wrap</span><span class="symbol">(</span><span class="keyword">new</span><span class="normal"> clojure</span><span class="symbol">.</span><span class="normal">lang</span><span class="symbol">.</span><span class="function">AFn</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">			</span><span class="keyword">public</span><span class="normal"> Object </span><span class="function">invoke</span><span class="symbol">(</span><span class="normal">Object arg0</span><span class="symbol">)</span><span class="normal"> </span><span class="keyword">throws</span><span class="normal"> Exception </span><span class="cbracket">{</span>
+<span class="normal">				</span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">arg0 </span><span class="symbol">==</span><span class="normal"> </span><span class="keyword">null</span><span class="symbol">)</span><span class="normal"> </span><span class="keyword">throw</span><span class="normal"> </span><span class="keyword">new</span><span class="normal"> </span><span class="function">IllegalArgumentException</span><span class="symbol">(</span><span class="string">"null arg"</span><span class="symbol">);</span>
+<span class="normal">				System</span><span class="symbol">.</span><span class="normal">out</span><span class="symbol">.</span><span class="function">println</span><span class="symbol">(</span><span class="string">"Invoked with: "</span><span class="symbol">+</span><span class="normal">arg0</span><span class="symbol">);</span>
+<span class="normal">				</span><span class="keyword">return</span><span class="normal"> arg0</span><span class="symbol">;</span>
+<span class="normal">			</span><span class="cbracket">}</span>
+<span class="normal">		</span><span class="cbracket">}</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="function">succeed</span><span class="symbol">(</span><span class="normal">atomicCircuitBreaker</span><span class="symbol">,</span><span class="normal"> wrap</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="function">fail</span><span class="symbol">(</span><span class="normal">atomicCircuitBreaker</span><span class="symbol">,</span><span class="normal"> wrap</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="function">fail</span><span class="symbol">(</span><span class="normal">atomicCircuitBreaker</span><span class="symbol">,</span><span class="normal"> wrap</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="function">fail</span><span class="symbol">(</span><span class="normal">atomicCircuitBreaker</span><span class="symbol">,</span><span class="normal"> wrap</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="function">fail</span><span class="symbol">(</span><span class="normal">atomicCircuitBreaker</span><span class="symbol">,</span><span class="normal"> wrap</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="function">fail</span><span class="symbol">(</span><span class="normal">atomicCircuitBreaker</span><span class="symbol">,</span><span class="normal"> wrap</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="function">fail</span><span class="symbol">(</span><span class="normal">atomicCircuitBreaker</span><span class="symbol">,</span><span class="normal"> wrap</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="function">sleep</span><span class="symbol">(</span><span class="number">1000</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="function">status</span><span class="symbol">(</span><span class="normal">atomicCircuitBreaker</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="function">fail</span><span class="symbol">(</span><span class="normal">atomicCircuitBreaker</span><span class="symbol">,</span><span class="normal"> wrap</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="function">sleep</span><span class="symbol">(</span><span class="number">5000</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="function">succeed</span><span class="symbol">(</span><span class="normal">atomicCircuitBreaker</span><span class="symbol">,</span><span class="normal"> wrap</span><span class="symbol">);</span>
+<span class="normal">	</span><span class="cbracket">}</span>
+
+<span class="normal">	</span>
+<span class="normal">	</span><span class="keyword">private</span><span class="normal"> </span><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span><span class="normal"> </span><span class="function">sleep</span><span class="symbol">(</span><span class="type">long</span><span class="normal"> howlong</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">		</span><span class="keyword">try</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">			Thread</span><span class="symbol">.</span><span class="function">sleep</span><span class="symbol">(</span><span class="normal">howlong</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">catch</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">InterruptedException e</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">			</span><span class="comment">// TODO Auto-generated catch block</span>
+<span class="normal">			e</span><span class="symbol">.</span><span class="function">printStackTrace</span><span class="symbol">();</span>
+<span class="normal">		</span><span class="cbracket">}</span>
+<span class="normal">	</span><span class="cbracket">}</span>
+
+<span class="normal">	</span><span class="keyword">private</span><span class="normal"> </span><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span><span class="normal"> </span><span class="function">succeed</span><span class="symbol">(</span><span class="normal">CircuitBreaker atomicCircuitBreaker</span><span class="symbol">,</span><span class="normal"> IFn wrap</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">		</span><span class="keyword">try</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">			System</span><span class="symbol">.</span><span class="normal">out</span><span class="symbol">.</span><span class="function">println</span><span class="symbol">(</span><span class="normal">wrap</span><span class="symbol">.</span><span class="function">invoke</span><span class="symbol">(</span><span class="string">"KARL"</span><span class="symbol">));</span>
+<span class="normal">			System</span><span class="symbol">.</span><span class="normal">out</span><span class="symbol">.</span><span class="function">println</span><span class="symbol">(</span><span class="normal">wrap</span><span class="symbol">.</span><span class="function">invoke</span><span class="symbol">(</span><span class="number">42</span><span class="symbol">));</span>
+<span class="normal">		</span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">catch</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">Exception e</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">			System</span><span class="symbol">.</span><span class="normal">out</span><span class="symbol">.</span><span class="function">println</span><span class="symbol">(</span><span class="normal">e</span><span class="symbol">.</span><span class="function">getMessage</span><span class="symbol">());</span>
+<span class="normal">		</span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">finally</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">			</span><span class="function">status</span><span class="symbol">(</span><span class="normal">atomicCircuitBreaker</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="cbracket">}</span>
+<span class="normal">	</span><span class="cbracket">}</span>
+
+
+<span class="normal">	</span><span class="keyword">private</span><span class="normal"> </span><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span><span class="normal"> </span><span class="function">status</span><span class="symbol">(</span><span class="normal">CircuitBreaker atomicCircuitBreaker</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">		System</span><span class="symbol">.</span><span class="normal">out</span><span class="symbol">.</span><span class="function">println</span><span class="symbol">(</span><span class="normal">RT</span><span class="symbol">.</span><span class="function">printString</span><span class="symbol">(</span><span class="normal">atomicCircuitBreaker</span><span class="symbol">.</span><span class="function">current_state</span><span class="symbol">()));</span>
+<span class="normal">	</span><span class="cbracket">}</span>
+
+<span class="normal">	</span><span class="keyword">private</span><span class="normal"> </span><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span><span class="normal"> </span><span class="function">fail</span><span class="symbol">(</span><span class="normal">CircuitBreaker atomicCircuitBreaker</span><span class="symbol">,</span><span class="normal"> IFn wrap</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">		</span><span class="keyword">try</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">			System</span><span class="symbol">.</span><span class="normal">out</span><span class="symbol">.</span><span class="function">println</span><span class="symbol">(</span><span class="normal">wrap</span><span class="symbol">.</span><span class="function">invoke</span><span class="symbol">(</span><span class="keyword">null</span><span class="symbol">));</span>
+<span class="normal">			System</span><span class="symbol">.</span><span class="normal">out</span><span class="symbol">.</span><span class="function">println</span><span class="symbol">(</span><span class="normal">wrap</span><span class="symbol">.</span><span class="function">invoke</span><span class="symbol">(</span><span class="number">42</span><span class="symbol">));</span>
+<span class="normal">		</span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">catch</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">Exception e</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">			System</span><span class="symbol">.</span><span class="normal">out</span><span class="symbol">.</span><span class="function">println</span><span class="symbol">(</span><span class="normal">e</span><span class="symbol">.</span><span class="function">getMessage</span><span class="symbol">());</span>
+<span class="normal">		</span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">finally</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">			</span><span class="function">status</span><span class="symbol">(</span><span class="normal">atomicCircuitBreaker</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="cbracket">}</span>
+<span class="normal">	</span><span class="cbracket">}</span>
+<span class="cbracket">}</span>
+</tt></pre>
+
+This is getting long. I'll save the comparison for the next post :-)
+
+Github: <a href="http://github.com/krukow/clojure-circuit-breaker">http://github.com/krukow/clojure-circuit-breaker</a> 

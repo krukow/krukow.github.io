@@ -1,0 +1,66 @@
+---
+layout: post
+title: Extending Ext.data.Record to support inheritance for domain types
+tags:
+- General
+status: publish
+type: post
+published: true
+meta:
+  blogger_blog: higher-order.blogspot.com
+  blogger_author: krukowhttp://www.blogger.com/profile/02045796732071392830noreply@blogger.com
+  blogger_permalink: /2008/03/extending-extdatarecord-to-support.html
+  _edit_last: '1'
+---
+As I've <a href="http://higher-order.blogspot.com/2008/03/clientserver-web-apps-model-part-i.html">previously blogged about</a>, the JavaScript framework ExtJS provides an excellent support for developing models in Controller-Model-View architectures in web-browser client applications. One of the tools Ext provides is the function <span style="font-family: courier-new;">Ext.data.Record.create</span>: using this one can easily create constructor functions for domain concepts. For example, in our room-booking application, TriBook, we defined a Reservation type concisely like this:
+<pre><tt><span class="normal">com</span><span class="symbol">.</span><span class="normal">trifork</span><span class="symbol">.</span><span class="normal">tribook</span><span class="symbol">.</span><span class="normal">model</span><span class="symbol">.</span><span class="normal">Reservation </span><span class="symbol">=</span><span class="normal"> Ext</span><span class="symbol">.</span><span class="normal">data</span><span class="symbol">.</span><span class="normal">Record</span><span class="symbol">.</span><span class="function">create</span><span class="symbol">([</span>
+<span class="normal">       </span><span class="cbracket">{</span><span class="normal">name</span><span class="symbol">:</span><span class="normal"> </span><span class="string">'start_at'</span><span class="symbol">,</span><span class="normal"> type</span><span class="symbol">:</span><span class="string">'date'</span><span class="symbol">,</span><span class="normal"> dateFormat</span><span class="symbol">:</span><span class="string">'d/m/Y-H:i'</span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">       </span><span class="cbracket">{</span><span class="normal">name</span><span class="symbol">:</span><span class="normal"> </span><span class="string">'end_at'</span><span class="symbol">,</span><span class="normal"> type</span><span class="symbol">:</span><span class="string">'date'</span><span class="symbol">,</span><span class="normal"> dateFormat</span><span class="symbol">:</span><span class="string">'d/m/Y-H:i'</span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">       </span><span class="cbracket">{</span><span class="normal">name</span><span class="symbol">:</span><span class="normal"> </span><span class="string">'room'</span><span class="cbracket">}</span>
+<span class="symbol">]);</span>
+</tt></pre>
+
+That is: a Reservation object has 'start_at' and 'end_at' Date properties as well as a 'room' property (which refers to a 'Room' domain object, defined of course using <span style="font-family: courier-new;">Ext.data.Record.create</span>).
+
+One point made in a previous article is that <span style="font-family: courier-new;">Ext.data.Record.create</span> returns a JavaScript <em>constructor function</em> for the defined domain concept. This means that we can add domain logic to our domain types by augmenting their prototypes, e.g.,
+<pre><tt><span class="normal">Ext</span><span class="symbol">.</span><span class="function">apply</span><span class="symbol">(</span><span class="normal">com</span><span class="symbol">.</span><span class="normal">trifork</span><span class="symbol">.</span><span class="normal">tribook</span><span class="symbol">.</span><span class="normal">model</span><span class="symbol">.</span><span class="normal">Reservation</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">,</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">     isPreLunchReservation</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span><span class="comment">//just an example...</span>
+<span class="normal">         </span><span class="keyword">var</span><span class="normal"> sh </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">this</span><span class="symbol">.</span><span class="function">get</span><span class="symbol">(</span><span class="string">'start_at'</span><span class="symbol">).</span><span class="function">getHours</span><span class="symbol">(),</span>
+<span class="normal">             eh </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">this</span><span class="symbol">.</span><span class="function">get</span><span class="symbol">(</span><span class="string">'end_at'</span><span class="symbol">).</span><span class="function">getHours</span><span class="symbol">();</span>
+<span class="normal">         </span><span class="keyword">return</span><span class="normal"> </span><span class="number">6</span><span class="normal"> </span><span class="symbol">&lt;</span><span class="normal"> sh </span><span class="symbol">&amp;&amp;</span><span class="normal"> eh </span><span class="symbol">&lt;</span><span class="normal"> </span><span class="number">11</span><span class="symbol">;</span><span class="comment">//must end before noon...</span>
+<span class="normal">     </span><span class="cbracket">}</span>
+<span class="cbracket">}</span><span class="symbol">);</span>
+</tt></pre>
+
+This is all very useful, particularly because <span style="font-family: courier-new;">Ext.data.Record</span> objects are supported by a bunch of other Ext functions, as discussed previously.
+
+However, there is no built-in support for inheritance in domain concepts. For example, suppose that we like to create a sub-type of our reservation domain type: a RecurringReservation, which one can use e.g., to reserve a room the same time each week. It would be nice to be able to write the following:
+<pre><tt><span class="keyword">var</span><span class="normal"> m </span><span class="symbol">=</span><span class="normal"> com</span><span class="symbol">.</span><span class="normal">trifork</span><span class="symbol">.</span><span class="normal">tribook</span><span class="symbol">.</span><span class="normal">model</span><span class="symbol">;</span>
+<span class="normal">m</span><span class="symbol">.</span><span class="normal">RecurringReservation </span><span class="symbol">=</span><span class="normal"> Ext</span><span class="symbol">.</span><span class="normal">data</span><span class="symbol">.</span><span class="normal">Record</span><span class="symbol">.</span><span class="function">extend</span><span class="symbol">(</span><span class="normal">m</span><span class="symbol">.</span><span class="normal">Reservation</span><span class="symbol">,</span><span class="normal"> </span><span class="symbol">[</span>
+<span class="normal">      </span><span class="cbracket">{</span><span class="normal">name</span><span class="symbol">:</span><span class="string">'interval'</span><span class="symbol">,</span><span class="normal"> type</span><span class="symbol">:</span><span class="string">'string'</span><span class="cbracket">}</span><span class="comment">//can be 'daily','weekly', 'monthly' or 'yearly'</span>
+<span class="symbol">]);</span>
+<span class="keyword">var</span><span class="normal"> rr </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">new</span><span class="normal"> m</span><span class="symbol">.</span><span class="function">RecurringReservation</span><span class="symbol">(</span><span class="cbracket">{</span>
+<span class="normal">           start_at</span><span class="symbol">:</span><span class="string">'17/03/2008-08:00'</span><span class="symbol">,</span>
+<span class="normal">           end_at</span><span class="symbol">:</span><span class="string">'17/03/2008-09:30'</span><span class="symbol">,</span>
+<span class="normal">           room</span><span class="symbol">:</span><span class="normal">room_ref</span><span class="symbol">,</span><span class="comment">//assuming room_ref refers to a m.Room object.</span>
+<span class="normal">           interval</span><span class="symbol">:</span><span class="normal"> </span><span class="string">'weekly'</span>
+<span class="cbracket">}</span><span class="symbol">);</span>
+</tt></pre>
+
+Now, the object referred to by 'rr' should have all the specified state, <em>and</em> all the domain logic of Reservation should be inherited, e.g., 'isPreLunchReservation' also works for RecurringReservation objects.
+
+The following is an Ext extension that makes the above snipplet work:
+<pre><tt><span class="normal">Ext</span><span class="symbol">.</span><span class="normal">data</span><span class="symbol">.</span><span class="normal">Record</span><span class="symbol">.</span><span class="normal">extend </span><span class="symbol">=</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">sp</span><span class="symbol">,</span><span class="normal">fields</span><span class="symbol">)</span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="keyword">var</span><span class="normal"> sb </span><span class="symbol">=</span><span class="normal"> Ext</span><span class="symbol">.</span><span class="function">extend</span><span class="symbol">(</span><span class="normal">sp</span><span class="symbol">,</span><span class="cbracket">{}</span><span class="symbol">),</span>
+<span class="normal">            sb_f </span><span class="symbol">=</span><span class="normal"> sb</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">.</span><span class="normal">fields</span><span class="symbol">.</span><span class="function">clone</span><span class="symbol">(),</span>
+<span class="normal">            Field </span><span class="symbol">=</span><span class="normal"> Ext</span><span class="symbol">.</span><span class="normal">data</span><span class="symbol">.</span><span class="normal">Field</span><span class="symbol">,</span>
+<span class="normal">            i</span><span class="symbol">,</span><span class="normal">N</span><span class="symbol">;</span>
+
+<span class="normal">        </span><span class="keyword">for</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">i</span><span class="symbol">=</span><span class="number">0</span><span class="symbol">,</span><span class="normal">N</span><span class="symbol">=</span><span class="normal">fields</span><span class="symbol">.</span><span class="normal">length</span><span class="symbol">;</span><span class="normal"> i</span><span class="symbol">&lt;</span><span class="normal">N</span><span class="symbol">;</span><span class="normal"> i</span><span class="symbol">++)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">                sb_f</span><span class="symbol">.</span><span class="function">add</span><span class="symbol">(</span><span class="keyword">new</span><span class="normal"> </span><span class="function">Field</span><span class="symbol">(</span><span class="normal">fields</span><span class="symbol">[</span><span class="normal">i</span><span class="symbol">]));</span>
+<span class="normal">        </span><span class="cbracket">}</span>
+<span class="normal">        sb</span><span class="symbol">.</span><span class="keyword">prototype</span><span class="symbol">.</span><span class="normal">fields </span><span class="symbol">=</span><span class="normal"> sb_f</span><span class="symbol">;</span>
+<span class="normal">        </span><span class="keyword">return</span><span class="normal"> sb</span><span class="symbol">;</span>
+<span class="cbracket">}</span><span class="symbol">;</span>
+</tt></pre>
+ 

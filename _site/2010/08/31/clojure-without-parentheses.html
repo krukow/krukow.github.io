@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <title>Clojure without the parentheses: looks a bit like ruby :)</title>
+        <meta name="viewport" content="width=device-width">
+
+        <!-- syntax highlighting CSS -->
+        <link rel="stylesheet" href="/css/syntax.css">
+
+        <!-- Custom CSS -->
+        <link rel="stylesheet" href="/css/main.css">
+
+    </head>
+    <body>
+
+        <div class="site">
+          <div class="header">
+            <h1 class="title"><a href="/">Your New Jekyll Site</a></h1>
+            <a class="extra" href="/">home</a>
+          </div>
+
+          <h2>Clojure without the parentheses: looks a bit like ruby :)</h2>
+<p class="meta">31 Aug 2010</p>
+
+<div class="post">
+I gave an introductory talk about Clojure at Trifork yesterday:
+
+<a href="https://secure.trifork.com/aarhus-2010/freeevent/index.jsp?eventOID=2713">https://secure.trifork.com/aarhus-2010/freeevent/index.jsp?eventOID=2713
+</a>
+
+I really wanted to focus on the core of Clojure: things like time/state management, functional programming, programming to contracts, meta programming, host interop, dynamics, interactivity and expressive power. I want people to see what Clojure is without being blinded by <a href="http://img264.imageshack.us/img264/1397/lispnd7.png">what is a mental blocker for some: the parentheses</a>. 
+
+So as a fun exercise, I decided to remove (almost) all parentheses from code on my slides. As it turns out, the code looks much like ruby or python (just more functional and concise). All code on my slides can be turned into real Clojure code by inserting parens appropriate places (newlines and indentation help with "visual parsing"). The "commas are whitespace" is used to make it more readable (for comma-liking eyes). Obviously as we go into meta programming with macros this breaks down, but that is the last topic of the talk :)
+
+<a href="http://blog.higher-order.net/files/clj/clojure-intro.pdf">slides</a>
+
+Github repos:
+
+<a href="http://github.com/krukow/swing-demo">http://github.com/krukow/swing-demo
+</a>
+<a href="http://github.com/krukow/ants-demo">http://github.com/krukow/ants-demo</a>
+<a href="http://github.com/krukow/clojure-circuit-breaker">http://github.com/krukow/clojure-circuit-breaker</a>
+
+Examples (I know the semantics aren't exactly the same, but I am considering syntax here). 
+<div style="float:left">
+<strong>Ruby</strong>:<pre><tt><code>ruby-1.9.2-p0 > def m
+ruby-1.9.2-p0 ?>  {:name => "Karl", :age => 42}
+ruby-1.9.2-p0 ?>  end
+ruby-1.9.2-p0 > m
+ => {:name=>"Karl", :age=>42} 
+ruby-1.9.2-p0 > 
+</code>
+</tt></pre>
+</div>
+<div style="float:left; margin-left: 10px">
+<strong>Clojure</strong>:<pre><tt><code>user> def p
+         {:name "Fred", :age 42}
+#'user/p
+user> p
+{:name "Fred", :age 42}
+</code>
+</tt></pre>
+</div>
+<div style="clear:both;" ></div>
+<div style="float:left">
+<strong>Ruby</strong>:<pre><tt><code>ruby-1.9.2-p0 > class Person
+ruby-1.9.2-p0 ?>  attr :name,:age
+ruby-1.9.2-p0 ?>  attr_writer :name,:age
+ruby-1.9.2-p0 ?>  end
+ruby-1.9.2-p0 > p = Person.new
+ => #<Person:0x00000101073580> 
+ruby-1.9.2-p0 > p.name="fred";p.age=42;
+ruby-1.9.2-p0 > [p,p,p].map &:name
+ => ["fred", "fred", "fred"] 
+</code>
+</tt></pre>
+</div>
+<div style="float:left; margin-left: 10px">
+<strong>Clojure</strong>:<pre><tt><code>
+user> map :name [p,p,p]
+("Fred" "Fred" "Fred")
+;;or
+user> defrecord Person [name,age]
+user.Person
+user> def p 
+         Person. "Fred", 42
+#'user/p
+user> map :name [p, p, p]
+("Fred" "Fred" "Fred")
+</code>
+</tt></pre>
+</div>
+<div style="clear:both;" ></div>
+<div style="float:left">
+<strong>Ruby</strong>:<pre><tt><code>ruby-1.9.2-p0 > [p,p,p].map(&:age).reduce(&:+)
+ => 126 
+</code>
+</tt></pre>
+</div>
+<div style="float:left; margin-left: 10px">
+<strong>Clojure</strong>:<pre><tt><code>
+reduce + 
+   map :age [p p p] => 126
+;;or
+->> [p p p] 
+          map :age
+           reduce +
+</code>
+</tt></pre>
+</div>
+<div style="clear:both;" ></div>
+
+</div>
+
+
+          <div class="footer">
+            <div class="contact">
+              <p>
+                Your Name<br />
+                What You Are<br />
+                you@example.com
+              </p>
+            </div>
+            <div class="contact">
+              <p>
+                <a href="https://github.com/yourusername">github.com/yourusername</a><br />
+                <a href="https://twitter.com/yourusername">twitter.com/yourusername</a><br />
+              </p>
+            </div>
+          </div>
+        </div>
+
+    </body>
+</html>

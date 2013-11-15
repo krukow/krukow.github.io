@@ -1,0 +1,161 @@
+---
+layout: post
+title: Manual code specialization:a poor-mans partial evaluation in JavaScript
+tags:
+- closures
+- code specialization
+- JavaScript
+- partial evaluation
+- performance
+- sharing
+status: publish
+type: post
+published: true
+meta:
+  blogger_blog: higher-order.blogspot.com
+  blogger_author: krukowhttp://www.blogger.com/profile/02045796732071392830noreply@blogger.com
+  blogger_permalink: /2008/07/manual-code-specialization-poor-mans.html
+  _edit_last: '1'
+---
+Recall the object function that Douglas Crockford is promoting in his work on prototypal inheritance in JavaScript:
+<pre><tt><strong><span style="color: #0000ff;">function</span></strong> <strong><span style="color: #000000;">object</span></strong><span style="color: #990000;">(</span>p<span style="color: #990000;">)</span> <span style="color: #ff0000;">{</span>
+   <strong><span style="color: #0000ff;">function</span></strong> <strong><span style="color: #000000;">F</span></strong><span style="color: #990000;">()</span><span style="color: #ff0000;">{}</span>
+   F<span style="color: #990000;">.</span><strong><span style="color: #0000ff;">prototype</span></strong> <span style="color: #990000;">=</span> p<span style="color: #990000;">;</span>
+   <strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">new</span></strong> <strong><span style="color: #000000;">F</span></strong><span style="color: #990000;">();</span>
+<span style="color: #ff0000;">}</span>
+</tt></pre>
+The object function creates a new object which has the input object (p) as it's prototype.
+
+On the <a href="http://groups.google.com/group/comp.lang.javascript/topics">comp.lang.javascript newsgroup</a> Richard Cornford showed a <a href="http://groups.google.com/group/comp.lang.javascript/msg/e04726a66face2a2">functionally equivalent version</a> which has better performance in general:
+<pre><tt><tt><strong><span style="color: #0000ff;">var</span></strong> object <span style="color: #990000;">=</span> <span style="color: #990000;">(</span><strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">()</span><span style="color: #ff0000;">{</span>
+    <strong><span style="color: #0000ff;">function</span></strong> <strong><span style="color: #000000;">F</span></strong><span style="color: #990000;">()</span><span style="color: #ff0000;">{}</span>
+    <strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">(</span>p<span style="color: #990000;">)</span><span style="color: #ff0000;">{</span>
+        F<span style="color: #990000;">.</span><strong><span style="color: #0000ff;">prototype</span></strong> <span style="color: #990000;">=</span> p<span style="color: #990000;">;</span>
+        <strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">new</span></strong> <strong><span style="color: #000000;">F</span></strong><span style="color: #990000;">();</span>
+    <span style="color: #ff0000;">}</span><span style="color: #990000;">;</span>
+<span style="color: #ff0000;">}</span><span style="color: #990000;">)();</span></tt></tt></pre>
+In this version, all invocations of object share the same F which has its prototype mutated with each call. Cornford argues:
+<blockquote><tt>[The first version of 'object']... is an example of the process that clearly expresses what is being done, but is not particularly efficient as it creates a new - F - function each time it is executed, but all of those - F - functions are essentially identical. If this is to be done often then a more efficient approach would be to only create a single - F - function and put it where it could not be modified by external code.</tt></blockquote>
+Now, it is important to notice that in general one has to be careful when applying this technique to recursive functions as a variable mutation in one level of recursion may affect others. Also, if we were to put threads into JavaScript, this code would go from being thread-safe in the original form to non-thread safe in the optimized form. However, for now, this technique can be applied in performance-critical functions.
+
+In fact, there is a general technique here that one might call code specialization via higher-order functions (which can be seen as a poor-mans form of partial evaluation). Here is a simple example of that general technique: The 'mk_tag' function creates the string for an html tag with a class attribute and a text-contents.
+<pre><tt><strong><span style="color: #0000ff;">function</span></strong> <strong><span style="color: #000000;">mk_tag</span></strong><span style="color: #990000;">(</span>tag_name<span style="color: #990000;">,</span>clazz<span style="color: #990000;">,</span>contents<span style="color: #990000;">)</span> <span style="color: #ff0000;">{</span>
+   <strong><span style="color: #0000ff;">return</span></strong> <span style="color: #ff0000;">'&lt;'</span><span style="color: #990000;">+</span>tag_name<span style="color: #990000;">+</span><span style="color: #ff0000;">' class="'</span><span style="color: #990000;">+</span>clazz<span style="color: #990000;">+</span><span style="color: #ff0000;">'"&gt;'</span><span style="color: #990000;">+</span>contents<span style="color: #990000;">+</span><span style="color: #ff0000;">'&lt;/'</span><span style="color: #990000;">+</span>tag_name<span style="color: #990000;">+</span><span style="color: #ff0000;">'&gt;'</span><span style="color: #990000;">;</span>
+<span style="color: #ff0000;">}</span>
+</tt></pre>
+Using code specialization via higher-order functions (by currying), we can make specialized functions for writing e.g. 'div' tags, and specialized (faster) functions for making 'div' tags with certain classes. The trick is to compute as much as is possible with the given inputs before returning the specialized function:
+<pre><tt><em><span style="color: #9a1900;">//a curried version which specializes to it's input</span></em>
+<strong><span style="color: #0000ff;">function</span></strong> <strong><span style="color: #000000;">curried_mk_tag</span></strong><span style="color: #990000;">(</span>tag_name<span style="color: #990000;">)</span> <span style="color: #ff0000;">{</span>
+  <strong><span style="color: #0000ff;">var</span></strong> tag_hd <span style="color: #990000;">=</span> <span style="color: #ff0000;">'&lt;'</span><span style="color: #990000;">+</span>tag_name<span style="color: #990000;">+</span><span style="color: #ff0000;">' class="'</span><span style="color: #990000;">,</span>
+      tag_tail <span style="color: #990000;">=</span> <span style="color: #ff0000;">'&lt;/'</span><span style="color: #990000;">+</span>tag_name<span style="color: #990000;">+</span><span style="color: #ff0000;">'&gt;'</span><span style="color: #990000;">;</span>
+  <strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">(</span>clazz<span style="color: #990000;">)</span> <span style="color: #ff0000;">{</span>
+     <strong><span style="color: #0000ff;">var</span></strong> head <span style="color: #990000;">=</span> tag_hd<span style="color: #990000;">+</span>clazz<span style="color: #990000;">+</span><span style="color: #ff0000;">'"&gt;'</span><span style="color: #990000;">;</span>
+     <strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">(</span>contents<span style="color: #990000;">)</span> <span style="color: #ff0000;">{</span>
+         <strong><span style="color: #0000ff;">return</span></strong> head<span style="color: #990000;">+</span>contents<span style="color: #990000;">+</span>tag_tail<span style="color: #990000;">;</span>
+     <span style="color: #ff0000;">}</span><span style="color: #990000;">;</span>
+  <span style="color: #ff0000;">}</span><span style="color: #990000;">;</span>
+<span style="color: #ff0000;">}</span>
+
+<strong><span style="color: #0000ff;">var</span></strong> mk_div <span style="color: #990000;">=</span> <strong><span style="color: #000000;">curried_mk_tag</span></strong><span style="color: #990000;">(</span><span style="color: #ff0000;">"div"</span><span style="color: #990000;">);</span>
+<strong><span style="color: #0000ff;">var</span></strong> mk_div_green <span style="color: #990000;">=</span> <strong><span style="color: #000000;">mk_div</span></strong><span style="color: #990000;">(</span><span style="color: #ff0000;">"green"</span><span style="color: #990000;">);</span>
+<strong><span style="color: #0000ff;">var</span></strong> mk_div_blue <span style="color: #990000;">=</span> <strong><span style="color: #000000;">mk_div</span></strong><span style="color: #990000;">(</span><span style="color: #ff0000;">"blue"</span><span style="color: #990000;">);</span>
+<strong><span style="color: #000000;">mk_div_green</span></strong><span style="color: #990000;">(</span><span style="color: #ff0000;">"karl"</span><span style="color: #990000;">)</span><em><span style="color: #9a1900;">//&lt;-- "&lt;div class="green"&gt;karl&lt;/div&gt;"</span></em>
+<strong><span style="color: #000000;">mk_div_blue</span></strong><span style="color: #990000;">(</span><span style="color: #ff0000;">"karl"</span><span style="color: #990000;">)</span><em><span style="color: #9a1900;">//&lt;-- "&lt;div class="blue"&gt;karl&lt;/div&gt;"</span></em>
+</tt></pre>
+This is elegant as functions can be reused, e.g., 'mk_div_green("karl");mk_div_green("krukow")'. But notice that it is more efficient than simply using a general currier (e.g., <a href="http://www.dustindiaz.com/javascript-curry/">Diaz</a>); essentially it is a form of manual partial evaluation.
+
+I'll post some performance measurements in a later posting, but initial results show that we can reduce execution time by roughly 40% by using the sharing form of the object function.
+<h2>More Examples</h2>
+I'm not sure how many JavaScript programmers are familiar with this type of optimization. Here are a bunch of real-world examples where it can be applied:
+
+<em>Prototype - Ajax.request function</em>
+<pre><tt><strong><span style="color: #0000ff;">var</span></strong> Ajax <span style="color: #990000;">=</span> <span style="color: #ff0000;">{</span><em><span style="color: #9a1900;">//original</span></em>
+  getTransport<span style="color: #990000;">:</span> <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">()</span> <span style="color: #ff0000;">{</span>
+    <strong><span style="color: #0000ff;">return</span></strong> Try<span style="color: #990000;">.</span><strong><span style="color: #000000;">these</span></strong><span style="color: #990000;">(</span>
+      <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">()</span> <span style="color: #ff0000;">{</span><strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">new</span></strong> <strong><span style="color: #000000;">XMLHttpRequest</span></strong><span style="color: #990000;">()</span><span style="color: #ff0000;">}</span><span style="color: #990000;">,</span>
+      <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">()</span> <span style="color: #ff0000;">{</span><strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">new</span></strong> <strong><span style="color: #000000;">ActiveXObject</span></strong><span style="color: #990000;">(</span><span style="color: #ff0000;">'Msxml2.XMLHTTP'</span><span style="color: #990000;">)</span><span style="color: #ff0000;">}</span><span style="color: #990000;">,</span>
+      <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">()</span> <span style="color: #ff0000;">{</span><strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">new</span></strong> <strong><span style="color: #000000;">ActiveXObject</span></strong><span style="color: #990000;">(</span><span style="color: #ff0000;">'Microsoft.XMLHTTP'</span><span style="color: #990000;">)</span><span style="color: #ff0000;">}</span>
+    <span style="color: #990000;">)</span> <span style="color: #990000;">||</span> <strong><span style="color: #0000ff;">false</span></strong><span style="color: #990000;">;</span>  <span style="color: #ff0000;">}</span><span style="color: #990000;">,</span>
+
+  activeRequestCount<span style="color: #990000;">:</span> <span style="color: #993399;">0</span>
+<span style="color: #ff0000;">}</span><span style="color: #990000;">;</span>
+</tt></pre>
+The thing to notice here is that every time getTransport is called prototype will recompute which XMLHttp transport to use. However, the result of Try.these will always  be the same in a particular run of Prototype, i.e., the showing of a page in one browser. So we might as well precompute which object is the correct one:
+<pre><tt><strong><span style="color: #0000ff;">var</span></strong> Ajax <span style="color: #990000;">=</span> <span style="color: #ff0000;">{</span><em><span style="color: #9a1900;">//modified form</span></em>
+  getTransport<span style="color: #990000;">:</span> Try<span style="color: #990000;">.</span><strong><span style="color: #000000;">these</span></strong><span style="color: #990000;">(</span>
+         <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">()</span> <span style="color: #ff0000;">{</span> <strong><span style="color: #0000ff;">new</span></strong> <strong><span style="color: #000000;">XMLHttpRequest</span></strong><span style="color: #990000;">();</span> <em><span style="color: #9a1900;">//test if it exists</span></em>
+            <strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">()</span> <span style="color: #ff0000;">{</span><strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">new</span></strong> <strong><span style="color: #000000;">XMLHttpRequest</span></strong><span style="color: #990000;">();</span><span style="color: #ff0000;">}</span>
+         <span style="color: #ff0000;">}</span><span style="color: #990000;">,</span>
+         <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">()</span> <span style="color: #ff0000;">{</span> <strong><span style="color: #0000ff;">new</span></strong> <strong><span style="color: #000000;">ActiveXObject</span></strong><span style="color: #990000;">(</span><span style="color: #ff0000;">'Msxml2.XMLHTTP'</span><span style="color: #990000;">);</span> <em><span style="color: #9a1900;">//test</span></em>
+            <strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">()</span> <span style="color: #ff0000;">{</span><strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">new</span></strong> <strong><span style="color: #000000;">ActiveXObject</span></strong><span style="color: #990000;">(</span><span style="color: #ff0000;">'Msxml2.XMLHTTP'</span><span style="color: #990000;">);</span> <span style="color: #ff0000;">}</span>
+         <span style="color: #ff0000;">}</span><span style="color: #990000;">,</span>
+         <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">()</span> <span style="color: #ff0000;">{</span> <strong><span style="color: #0000ff;">new</span></strong> <strong><span style="color: #000000;">ActiveXObject</span></strong><span style="color: #990000;">(</span><span style="color: #ff0000;">'Microsoft.XMLHTTP'</span><span style="color: #990000;">);</span>
+            <strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">()</span> <span style="color: #ff0000;">{</span><strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">new</span></strong> <strong><span style="color: #000000;">ActiveXObject</span></strong><span style="color: #990000;">(</span><span style="color: #ff0000;">'Microsoft.XMLHTTP'</span><span style="color: #990000;">);</span> <span style="color: #ff0000;">}</span>
+         <span style="color: #ff0000;">}</span><span style="color: #990000;">),</span>
+
+  activeRequestCount<span style="color: #990000;">:</span> <span style="color: #993399;">0</span>
+<span style="color: #ff0000;">}</span><span style="color: #990000;">;</span></tt></pre>
+<tt><em>jQuery - attr function</em></tt>
+<pre><tt><tt>attr<span style="color: #990000;">:</span> <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">(</span> name<span style="color: #990000;">,</span> value<span style="color: #990000;">,</span> type <span style="color: #990000;">)</span> <span style="color: #ff0000;">{</span>
+ <strong><span style="color: #0000ff;">var</span></strong> options <span style="color: #990000;">=</span> name<span style="color: #990000;">;</span>
+
+ <em><span style="color: #9a1900;">// Look for the case where we're accessing a style value</span></em>
+ <strong><span style="color: #0000ff;">if</span></strong> <span style="color: #990000;">(</span> name<span style="color: #990000;">.</span>constructor <span style="color: #990000;">==</span> String <span style="color: #990000;">)</span>
+  <strong><span style="color: #0000ff;">if</span></strong> <span style="color: #990000;">(</span> value <span style="color: #990000;">===</span> undefined <span style="color: #990000;">)</span>
+   <strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">this</span></strong><span style="color: #990000;">[</span><span style="color: #993399;">0</span><span style="color: #990000;">]</span> <span style="color: #990000;">&amp;</span>amp<span style="color: #990000;">;&amp;</span>amp<span style="color: #990000;">;</span> jQuery<span style="color: #990000;">[</span> type <span style="color: #990000;">||</span> <span style="color: #ff0000;">"attr"</span> <span style="color: #990000;">](</span> <strong><span style="color: #0000ff;">this</span></strong><span style="color: #990000;">[</span><span style="color: #993399;">0</span><span style="color: #990000;">],</span> name <span style="color: #990000;">);</span>
+
+  <strong><span style="color: #0000ff;">else</span></strong> <span style="color: #ff0000;">{</span>
+   options <span style="color: #990000;">=</span> <span style="color: #ff0000;">{}</span><span style="color: #990000;">;</span>
+   options<span style="color: #990000;">[</span> name <span style="color: #990000;">]</span> <span style="color: #990000;">=</span> value<span style="color: #990000;">;</span>
+  <span style="color: #ff0000;">}</span>
+
+  <em><span style="color: #9a1900;">// Check to see if we're setting style values</span></em>
+ <strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">this</span></strong><span style="color: #990000;">.</span><strong><span style="color: #000000;">each</span></strong><span style="color: #990000;">(</span><strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">(</span>i<span style="color: #990000;">)</span><span style="color: #ff0000;">{</span>
+  <em><span style="color: #9a1900;">// Set all the styles</span></em>
+  <strong><span style="color: #0000ff;">for</span></strong> <span style="color: #990000;">(</span> name <strong><span style="color: #0000ff;">in</span></strong> options <span style="color: #990000;">)</span>
+   jQuery<span style="color: #990000;">.</span><strong><span style="color: #000000;">attr</span></strong><span style="color: #990000;">(</span>    type <span style="color: #990000;">?</span>  <strong><span style="color: #0000ff;">this</span></strong><span style="color: #990000;">.</span>style <span style="color: #990000;">:</span>     <strong><span style="color: #0000ff;">this</span></strong><span style="color: #990000;">,</span>
+    name<span style="color: #990000;">,</span> jQuery<span style="color: #990000;">.</span><strong><span style="color: #000000;">prop</span></strong><span style="color: #990000;">(</span> <strong><span style="color: #0000ff;">this</span></strong><span style="color: #990000;">,</span> options<span style="color: #990000;">[</span> name <span style="color: #990000;">],</span> type<span style="color: #990000;">,</span> i<span style="color: #990000;">,</span> name <span style="color: #990000;">)</span>   <span style="color: #990000;">);</span>
+ <span style="color: #ff0000;">}</span><span style="color: #990000;">);</span>
+<span style="color: #ff0000;">}</span></tt></tt></pre>
+With jQuery we can't write a curried form as that would break compatability. However, we can still perform optimizations like what we had with the 'object' function. Notice that the function supplied to 'each' is created with each invocation of 'attr', you can also see a for-loop where a check to 'type' is made with each iteration. In our optimized version, attr chooses which inner function to give to 'each' by checking type first.
+<pre><tt><tt>jQuery<span style="color: #990000;">.</span>fn<span style="color: #990000;">.</span>attr <span style="color: #990000;">=</span> <span style="color: #990000;">(</span><strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">()</span><span style="color: #ff0000;">{</span>
+    <strong><span style="color: #0000ff;">var</span></strong> type<span style="color: #990000;">,</span>
+        options<span style="color: #990000;">,</span>
+        inner_type <span style="color: #990000;">=</span> <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">(</span>i<span style="color: #990000;">)</span><span style="color: #ff0000;">{</span>
+          <em><span style="color: #9a1900;">// Set all the styles</span></em>
+          <strong><span style="color: #0000ff;">var</span></strong> t  <span style="color: #990000;">=</span> type<span style="color: #990000;">,</span>
+              s  <span style="color: #990000;">=</span> <strong><span style="color: #0000ff;">this</span></strong><span style="color: #990000;">.</span>style<span style="color: #990000;">;</span>
+          <strong><span style="color: #0000ff;">for</span></strong> <span style="color: #990000;">(</span><strong><span style="color: #0000ff;">var</span></strong> name <strong><span style="color: #0000ff;">in</span></strong> options <span style="color: #990000;">)</span> <span style="color: #ff0000;">{</span>
+              jQuery<span style="color: #990000;">.</span><strong><span style="color: #000000;">attr</span></strong><span style="color: #990000;">(</span>s<span style="color: #990000;">,</span>
+                          name<span style="color: #990000;">,</span>
+                           jQuery<span style="color: #990000;">.</span><strong><span style="color: #000000;">prop</span></strong><span style="color: #990000;">(</span> <strong><span style="color: #0000ff;">this</span></strong><span style="color: #990000;">,</span> options<span style="color: #990000;">[</span> name <span style="color: #990000;">],</span> t<span style="color: #990000;">,</span> i<span style="color: #990000;">,</span> name <span style="color: #990000;">)</span>
+              <span style="color: #990000;">);</span>
+          <span style="color: #ff0000;">}</span>
+        <span style="color: #ff0000;">}</span><span style="color: #990000;">,</span>
+        inner_no_type <span style="color: #990000;">=</span> <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">(</span>i<span style="color: #990000;">)</span> <span style="color: #ff0000;">{</span>
+          <strong><span style="color: #0000ff;">for</span></strong> <span style="color: #990000;">(</span><strong><span style="color: #0000ff;">var</span></strong> name <strong><span style="color: #0000ff;">in</span></strong> options <span style="color: #990000;">)</span> <span style="color: #ff0000;">{</span>
+              jQuery<span style="color: #990000;">.</span><strong><span style="color: #000000;">attr</span></strong><span style="color: #990000;">(</span><strong><span style="color: #0000ff;">this</span></strong><span style="color: #990000;">,</span>
+                          name<span style="color: #990000;">,</span>
+                           jQuery<span style="color: #990000;">.</span><strong><span style="color: #000000;">prop</span></strong><span style="color: #990000;">(</span> <strong><span style="color: #0000ff;">this</span></strong><span style="color: #990000;">,</span> options<span style="color: #990000;">[</span> name <span style="color: #990000;">],</span> <strong><span style="color: #0000ff;">null</span></strong><span style="color: #990000;">,</span> i<span style="color: #990000;">,</span> name <span style="color: #990000;">)</span>
+              <span style="color: #990000;">);</span>
+          <span style="color: #ff0000;">}</span>
+        <span style="color: #ff0000;">}</span><span style="color: #990000;">;</span>
+
+    <strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">function</span></strong><span style="color: #990000;">(</span> name<span style="color: #990000;">,</span> value<span style="color: #990000;">,</span> t <span style="color: #990000;">)</span> <span style="color: #ff0000;">{</span>
+                type <span style="color: #990000;">=</span> t<span style="color: #990000;">;</span>
+                options <span style="color: #990000;">=</span> name<span style="color: #990000;">;</span>
+  <em><span style="color: #9a1900;">// Look for the case where we're accessing a style value</span></em>
+  <strong><span style="color: #0000ff;">if</span></strong> <span style="color: #990000;">(</span> name<span style="color: #990000;">.</span>constructor <span style="color: #990000;">==</span> String <span style="color: #990000;">)</span>
+   <strong><span style="color: #0000ff;">if</span></strong> <span style="color: #990000;">(</span> value <span style="color: #990000;">===</span> undefined <span style="color: #990000;">)</span>
+    <strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">this</span></strong><span style="color: #990000;">[</span><span style="color: #993399;">0</span><span style="color: #990000;">]</span> <span style="color: #990000;">&amp;</span>amp<span style="color: #990000;">;&amp;</span>amp<span style="color: #990000;">;</span> jQuery<span style="color: #990000;">[</span> type <span style="color: #990000;">||</span> <span style="color: #ff0000;">"attr"</span> <span style="color: #990000;">](</span> <strong><span style="color: #0000ff;">this</span></strong><span style="color: #990000;">[</span><span style="color: #993399;">0</span><span style="color: #990000;">],</span> name <span style="color: #990000;">);</span>
+
+   <strong><span style="color: #0000ff;">else</span></strong> <span style="color: #ff0000;">{</span>
+    options <span style="color: #990000;">=</span> <span style="color: #ff0000;">{}</span><span style="color: #990000;">;</span>
+    options<span style="color: #990000;">[</span> name <span style="color: #990000;">]</span> <span style="color: #990000;">=</span> value<span style="color: #990000;">;</span>
+   <span style="color: #ff0000;">}</span>
+
+  <em><span style="color: #9a1900;">// Check to see if we're setting style values</span></em>
+  <strong><span style="color: #0000ff;">return</span></strong> <strong><span style="color: #0000ff;">this</span></strong><span style="color: #990000;">.</span><strong><span style="color: #000000;">each</span></strong><span style="color: #990000;">(</span>t <span style="color: #990000;">?</span> inner_type <span style="color: #990000;">:</span> inner_no_type<span style="color: #990000;">);</span>
+ <span style="color: #ff0000;">}</span><span style="color: #990000;">;</span>
+<span style="color: #ff0000;">}</span><span style="color: #990000;">)();</span></tt></tt></pre>
+ 

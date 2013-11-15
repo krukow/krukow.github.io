@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <title>Stomple: JMS via WebSockets</title>
+        <meta name="viewport" content="width=device-width">
+
+        <!-- syntax highlighting CSS -->
+        <link rel="stylesheet" href="/css/syntax.css">
+
+        <!-- Custom CSS -->
+        <link rel="stylesheet" href="/css/main.css">
+
+    </head>
+    <body>
+
+        <div class="site">
+          <div class="header">
+            <h1 class="title"><a href="/">Your New Jekyll Site</a></h1>
+            <a class="extra" href="/">home</a>
+          </div>
+
+          <h2>Stomple: JMS via WebSockets</h2>
+<p class="meta">09 May 2010</p>
+
+<div class="post">
+I've spent a couple of days working on <a href="http://github.com/krukow/stomple">Stomple</a> (pronounced "stumble"). Stomple aims to be an easy to use, full-featured and robust <a href="http://stomp.codehaus.org/Protocol">Stomp</a> client for JavaScript. 
+
+You can watch a screencast of the transactional chat example.
+<a href="http://screencast.com/t/NzdmMGJj">Screencast of transactional chat</a>.
+
+<strong>What is Stomp?</strong> Stomp provides an interoperable wire format so that any of the available Stomp Clients can communicate with any Stomp Message Broker to provide easy and widespread messaging interop among languages, platforms and brokers. 
+
+You can use any of the Stomp Clients to work with any JMS compliant message broker, for example <a href="http://www.jboss.org/hornetq">HornetQ</a>. There are <a href="http://stomp.codehaus.org/Clients">Stomp clients for many languages</a>, and Stomple adds JavaScript via WebSockets. This means that you can send and receive JMS messages directly in the browser (when it supports WebSockets). 
+
+Stomple is inspired by <a href="http://www.jmesnil.net/stomp-websocket/doc/">Jeff Mesnil's cool stomp-websocket</a>, but I wanted more customization, feature-detection, a nicer API, and more robustness (e.g. timeouts) (and I wanted to write it myself :)). Just like Jeff's client, Stomple is not directly a Stomp client since it runs over WebSockets which requires a handshake between the browser's client and the server. This is supported by HornetQ and ActiveMQ (details in Jeff's docs:  <a href="http://www.jmesnil.net/stomp-websocket/doc/">http://www.jmesnil.net/stomp-websocket/doc/</a>).
+
+<blockquote>This library is not a pure Stomp client. It is aimed to run on the Web Sockets protocol which is not TCP. Basically, the Web Sockets protocol requires a handshake  between the browser client and the server to ensure the browser's "same-origin" security model remains in effect.
+
+This means that this library can not connect to regular Stomp brokers since they would not understand the handshake initiated by the Web Socket which is not part of the Stomp protocol and would likely reject the connection.</blockquote>
+
+I'll post more documentation soon, but stomple should be quite simple to use.
+
+<pre><tt>
+if (Stomple) {//feature detection: is stomple available?
+    Stomple.debug = true;//enable debug logging of messages
+    var client = Stomple.create_client({
+        url: "ws://localhost:61614/stomp", 
+        destination: "jms.topic.chat",
+        login: "guest",
+        passcode: "guest"
+    });
+    client.subscribe({
+        handler: function(f) {
+            console.log('received frame');
+            console.log(f);
+            console.log("Message: "+f.body);
+            console.log("'this' is bound to 'scope'");
+            console.log("Session:"+this.session);
+            client.send({
+                success: function() {},//handle successful send
+                failure: function() {},//handle failed send
+                timeout: 5000//wait max 5 seconds before failing
+            });
+        },
+        scope: client,
+        success: function() {//did subscription succeed?
+            console.log("sub ok..");
+        },    
+        failure: function() {//did subscription fail?
+            console.log("sub fail");
+        } 
+    });
+} </tt></pre>
+
+Check it out on Github: <a href="http://github.com/krukow/stomple">http://github.com/krukow/stomple</a>.
+
+More info to come ;) 
+
+</div>
+
+
+          <div class="footer">
+            <div class="contact">
+              <p>
+                Your Name<br />
+                What You Are<br />
+                you@example.com
+              </p>
+            </div>
+            <div class="contact">
+              <p>
+                <a href="https://github.com/yourusername">github.com/yourusername</a><br />
+                <a href="https://twitter.com/yourusername">twitter.com/yourusername</a><br />
+              </p>
+            </div>
+          </div>
+        </div>
+
+    </body>
+</html>

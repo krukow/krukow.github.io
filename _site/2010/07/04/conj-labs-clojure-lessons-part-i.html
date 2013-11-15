@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <title>Conj-labs Clojure lessons part i</title>
+        <meta name="viewport" content="width=device-width">
+
+        <!-- syntax highlighting CSS -->
+        <link rel="stylesheet" href="/css/syntax.css">
+
+        <!-- Custom CSS -->
+        <link rel="stylesheet" href="/css/main.css">
+
+    </head>
+    <body>
+
+        <div class="site">
+          <div class="header">
+            <h1 class="title"><a href="/">Your New Jekyll Site</a></h1>
+            <a class="extra" href="/">home</a>
+          </div>
+
+          <h2>Conj-labs Clojure lessons part i</h2>
+<p class="meta">04 Jul 2010</p>
+
+<div class="post">
+I attended the <a href="http://www.conj-labs.eu/">first conj-labs in Brussels, June 23-25</a>. It was three days of intense Clojure learning with Clojure profiles: <a href="http://clj-me.cgrand.net/">Christophe Grand</a> and <a href="http://www.bestinclass.dk/">Lau Jensen</a>. I must say it exceeded my expectations! Everyone was great and I really feel it took my Clojure to the next level.
+
+This post describes some mistakes I've made in the Clojure circuit breaker project, and how I managed to fix them, mostly due to guidance from Christophe. 
+
+The following is an (embarrassingly long) list of issues that my <a href="http://blog.higher-order.net/2010/05/05/circuitbreaker-clojure-1-2/">previous version of circuit breaker</a> had. I think others can learn from my mistakes.
+
+<strong>Platform speed protocol functions.</strong> In order for a protocol function reaching a datatype to run at platform call-speed, the datatype must inline the protocol implementation. In the old version, I extended the state transitions protocol to the circuit breaker states using (extend ...): this is usually 3-4x times slower than platform-speed method calls (but can be much slower when cache misses). I now inline the protocol extension to the states.
+
+This inlining gave a new problem. I had two data types, say A and B, where A creates an instance of B and B creates an instance of A in the implementation of the inlined protocol functions. You can't have this type of "mutually recursive data types" since they are compiled on the fly to Java classes. The fix was to...
+
+<strong>Create factory functions for your data types.</strong> There are at least two reasons for this. First a factory function can do processing of its arguments (e.g. pre condition), say for validation. The data type constructors can't have any logic. Second, as noted by Alex Miller on his blog: <a href="http://tech.puredanger.com/2010/06/30/using-records-from-a-different-namespace-in-clojure/&">to use data types defined in another namespace you must import them</a>. But you can use require/use to bring the factory functions into your namespace. 
+
+<strong>I thought I knew: protocols aren't interfaces (and Java interop).</strong>. I used a protocol: CircuitBreakerTransitions to model the states. The protocol contains functions needed for state transition on various events. I extended the protocol to my states, e.g., 
+<pre><code>
+(defrecord ClosedState [policy fail-count]
+  CircuitBreakerTransitions
+  ...)
+</code></pre>
+It inlines the protocol so the generated class implements the protocol's backing interface: It's fast and works great. 
+
+The problem appeared when I wanted to expose a Java API for the circuit breaker: one of the API methods getCurrentState returns the current state - now, the question is what is its signature? My first attempt was public CircuitBreakerTransitions getCurrentState(). Now what is wrong?
+
+The problem is that my protocol can be extended to reach other types. Those types may or may not inline the protocol functions, and hence it is possible for the protocol to reach a type which doesn't implement the CircuitBreakerTransitions interface... So should I just return "Object" - that isn't really useful. 
+
+I haven't implemented a solution yet, but this is what I am thinking. Keep the type: CircuitBreakerTransitions getCurrentState(), but in my Java-interop (gen-class), the function that implements getCurrentState should grab the state s from the circuit breaker. Now I know that (satisfies? CircuitBreakerTransitions s) is true, but (instance? (:on-interface CircuitBreakerTransitions) s) may be false. If it is true, I simply return it. Otherwise: reify  CircuitBreakerTransitions by delegating to the protocol functions on s. This may sound a bit wierd at first, but I think of it like creating a new object that satisfies the interface by dynamically dispatching to s.
+
+<strong>Type-hits are for removing reflection, not enforcing type safety</strong> My first iteration tried to type-hint the records, e.g.,
+<pre><code>
+(defrecord ClosedState [^TransitionPolicy policy ^int fail-count])
+</code></pre>
+
+This is just plain terrible :) First, those hints are ignored (but may be used in later versions of Clojure). Second, int isn't suported in the current version of Clojure. Third, TransitionPolicy is a protocol - and, yes, protocol's aren't interfaces (see above): problem being again if I supply an object that satisfies the protocol but doesn't implement the backing interface. Ugh.
+The reason I put the hints wasn't to remove reflection, it was for the generated constructor to have types (which is a valid thing to want, but unsupported now). But it is the wrong approach for the reasons above. 
+
+The right thing is to remove hints and expose a factory function which checks that the first argument satisfies the TransitionPolicy protocol and that the second argument is non-negative.
+
+<strong>Premature optimization</strong>. My circuit breaker implementation tried to optimize a corner-case for the swap! function: suppose you (swap! state f) and f applied to the current state is identically the same state. Then there is no reason to do a compare-and-set!. My transition-by! function implemented this optimization. However, this was a premature optimization that changes the semantics of time (wow, Clojure really is powerful :)). The fundamental question is this:  [s] -f-> [s] (where s is a state and f is a side-effect free function that advances time), is this transition really advancing time? (it isn't observable, is it?...)
+
+Anyway, I've never benchmarked the code so it was a premature optimization leading to less understandable code. Also, as <a href="http://twitter.com/chopmo">Jacob</a> and I discussed in the plane home: it actually skews the behavior of the circuit breaker to prefer switching states rather than staying in the same state - something that you may or may-not want.
+
+
+Finally an off-topic: It is now possible to build the Clojure circuit breaker including AOT compilation of Java interop classes. I ran into a problem with lein where the order of namespaces in :namespaces isn't preserved. This is a problem when you are gen-interfacing in one file and gen-class :implements that interface in another.
+
+I've created a very simple patch to lein to preserve the order.
+
+<a href="http://blog.higher-order.net/wp-content/uploads/2010/07/0001-don-t-convert-namespaces-aot-to-a-set-as-it-does-n.patch.txt">http://blog.higher-order.net/wp-content/uploads/2010/07/0001-don-t-convert-namespaces-aot-to-a-set-as-it-does-n.patch.txt</a>
+
+Phil is applying this patch so it should be out soon. Until then, if you don't want to patch lein, there is a step-by-step guide to repl AOT compilation in the <a href="http://github.com/krukow/clojure-circuit-breaker">README</a>.
+
+Those interested can grab the latest code.
+
+<a href="http://github.com/krukow/clojure-circuit-breaker">http://github.com/krukow/clojure-circuit-breaker</a>
+ 
+
+</div>
+
+
+          <div class="footer">
+            <div class="contact">
+              <p>
+                Your Name<br />
+                What You Are<br />
+                you@example.com
+              </p>
+            </div>
+            <div class="contact">
+              <p>
+                <a href="https://github.com/yourusername">github.com/yourusername</a><br />
+                <a href="https://twitter.com/yourusername">twitter.com/yourusername</a><br />
+              </p>
+            </div>
+          </div>
+        </div>
+
+    </body>
+</html>

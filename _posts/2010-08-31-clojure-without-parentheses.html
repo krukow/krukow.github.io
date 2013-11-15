@@ -1,0 +1,97 @@
+---
+layout: post
+title: 'Clojure without the parentheses: looks a bit like ruby :)'
+tags:
+- General
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+---
+I gave an introductory talk about Clojure at Trifork yesterday:
+
+<a href="https://secure.trifork.com/aarhus-2010/freeevent/index.jsp?eventOID=2713">https://secure.trifork.com/aarhus-2010/freeevent/index.jsp?eventOID=2713
+</a>
+
+I really wanted to focus on the core of Clojure: things like time/state management, functional programming, programming to contracts, meta programming, host interop, dynamics, interactivity and expressive power. I want people to see what Clojure is without being blinded by <a href="http://img264.imageshack.us/img264/1397/lispnd7.png">what is a mental blocker for some: the parentheses</a>. 
+
+So as a fun exercise, I decided to remove (almost) all parentheses from code on my slides. As it turns out, the code looks much like ruby or python (just more functional and concise). All code on my slides can be turned into real Clojure code by inserting parens appropriate places (newlines and indentation help with "visual parsing"). The "commas are whitespace" is used to make it more readable (for comma-liking eyes). Obviously as we go into meta programming with macros this breaks down, but that is the last topic of the talk :)
+
+<a href="http://blog.higher-order.net/files/clj/clojure-intro.pdf">slides</a>
+
+Github repos:
+
+<a href="http://github.com/krukow/swing-demo">http://github.com/krukow/swing-demo
+</a>
+<a href="http://github.com/krukow/ants-demo">http://github.com/krukow/ants-demo</a>
+<a href="http://github.com/krukow/clojure-circuit-breaker">http://github.com/krukow/clojure-circuit-breaker</a>
+
+Examples (I know the semantics aren't exactly the same, but I am considering syntax here). 
+<div style="float:left">
+<strong>Ruby</strong>:<pre><tt><code>ruby-1.9.2-p0 > def m
+ruby-1.9.2-p0 ?>  {:name => "Karl", :age => 42}
+ruby-1.9.2-p0 ?>  end
+ruby-1.9.2-p0 > m
+ => {:name=>"Karl", :age=>42} 
+ruby-1.9.2-p0 > 
+</code>
+</tt></pre>
+</div>
+<div style="float:left; margin-left: 10px">
+<strong>Clojure</strong>:<pre><tt><code>user> def p
+         {:name "Fred", :age 42}
+#'user/p
+user> p
+{:name "Fred", :age 42}
+</code>
+</tt></pre>
+</div>
+<div style="clear:both;" ></div>
+<div style="float:left">
+<strong>Ruby</strong>:<pre><tt><code>ruby-1.9.2-p0 > class Person
+ruby-1.9.2-p0 ?>  attr :name,:age
+ruby-1.9.2-p0 ?>  attr_writer :name,:age
+ruby-1.9.2-p0 ?>  end
+ruby-1.9.2-p0 > p = Person.new
+ => #<Person:0x00000101073580> 
+ruby-1.9.2-p0 > p.name="fred";p.age=42;
+ruby-1.9.2-p0 > [p,p,p].map &:name
+ => ["fred", "fred", "fred"] 
+</code>
+</tt></pre>
+</div>
+<div style="float:left; margin-left: 10px">
+<strong>Clojure</strong>:<pre><tt><code>
+user> map :name [p,p,p]
+("Fred" "Fred" "Fred")
+;;or
+user> defrecord Person [name,age]
+user.Person
+user> def p 
+         Person. "Fred", 42
+#'user/p
+user> map :name [p, p, p]
+("Fred" "Fred" "Fred")
+</code>
+</tt></pre>
+</div>
+<div style="clear:both;" ></div>
+<div style="float:left">
+<strong>Ruby</strong>:<pre><tt><code>ruby-1.9.2-p0 > [p,p,p].map(&:age).reduce(&:+)
+ => 126 
+</code>
+</tt></pre>
+</div>
+<div style="float:left; margin-left: 10px">
+<strong>Clojure</strong>:<pre><tt><code>
+reduce + 
+   map :age [p p p] => 126
+;;or
+->> [p p p] 
+          map :age
+           reduce +
+</code>
+</tt></pre>
+</div>
+<div style="clear:both;" ></div>

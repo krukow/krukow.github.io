@@ -1,0 +1,118 @@
+---
+layout: post
+title: 'Stomple RC1: Combining WebSockets and Reliable Messaging'
+tags:
+- General
+status: publish
+type: post
+published: true
+meta:
+  _edit_last: '1'
+---
+I've finished <a href="http://github.com/krukow/stomple">Release Candidate 1 for Stomple</a>, my JavaScript <a href="http://stomp.codehaus.org/Protocol">Stomp</a> library which uses WebSockets to access compatible Stomp Message Brokers (which includes JMS providers via <a href="http://stomp.codehaus.org/StompConnect">StompConnect</a>). Stomple is heavily inspired by Jeff Mesnil's great <a href="http://jmesnil.net/stomp-websocket/doc/">stomp-websocket</a>, but aims to be feature complete and to provide a high-level API which is more customizable, robust and easy to use. 
+
+<strong>What</strong>? From the <a href="http://stomp.codehaus.org/Home">Stomp website</a>: <blockquote>Stomp provides an interoperable wire format so that any of the available Stomp Clients can communicate with any Stomp Message Broker to provide easy and widespread messaging interop among languages, platforms and brokers.</blockquote>
+As mentioned, this includes JMS. Stomple is a JavaScript library which enables using browsers that support WebSockets as messaging clients, e.g., subscribing to an JMS topic in a JavaScript program running inside Chrome. 
+
+Websocket communication has less overhead than HTTP when HTTP semantics aren't needed. More importantly, WebSockets allow the <em>server</em> to push updates to the browser (as opposed to the usual HTTP request-response paradigm). For a simple example, see the <a href="http://screencast.com/t/NzdmMGJj">screen cast of the "transactional chat example"</a> where chat messages are pushed from the server to participating clients.
+ 
+<strong>Why</strong> release Stomple when there is already stomp-websocket? First of all, Jeff did an excellent job with stomp-websocket. However, I wanted additional features and more production maturity (e.g., support for timeouts, various low- and high-level callbacks and automatic receipts). 
+
+<strong>A few notable features:</strong>
+<ul>
+<li>Customizability and Callbacks. A key value of Stomple is that it shouldn't cut off access to any low-level functionality. Hence everything is customizable and accessible to the user code. All core functions support success and failure callbacks. Further, there are low-level callbacks: <tt>socketOpen, socketMessage, socketClose, socketError</tt> corresponding to the low-level websocket events. These can be used to customize behaviour for special use-cases. At a higher-level, there are callbacks <tt>onConnect, connectFailed, onError, onReceipt</tt> correspoding to the Stomp events.</li>
+	<li>Automatic receipts. If  <tt>client.autoReceipt</tt> is true (which it is by default), then all Stomp messages sent to the server include an automatically generated 'receipt' header. In the Stomp protocol, this causes the server to send a receipt for each message it receives, hence reassuring that the message has been received. If not enabled, the client can't be sure the message is actually received. </li>
+<li>Timeouts. By default all messages sent to the server are associated with a (configurable) 8 second timeout. So for example, suppose you subscribe to a destination, but do not receive a server receipt within 8 seconds: then your failure callback is called with reason 'timeout' and information about the message that failed. This way you are guaranteed that either your success or failure callback will always be called (but not both :)). These time-outs are pervasive and configurable per API call.</li>
+<li>Transaction management. In Stomp, transactions are started using the 'BEGIN' frame, corresponding to a begin function in Stomple. When you call begin, you don't have to specify a transaction-id: if you don't, one will be generated automatically for you. Further, any API calls made between a begin and a commit/abort automatically use this transaction identifier, hence grouping the calls in the same transaction (unless, of course, you explicitly provide a different or no transaction id). Further, this nests arbitrarily, and works in a stack-like manner (e.g., begin, begin, send, associates send with inner-most begin). </li>
+<li>Feature complete. Stomple aims to be feature complete. For example, it supports the recommended Stomp 'content-length' header, where the current stomp-websocket version does not.</li>
+<li>Correctness. Stomple is tested manually and has a growing automatic test-suite written in YUI3-test. Stomple passes JSLint.</li>
+</ul>
+
+I decided not to build on Jeff's library because when APIs become more complex, I prefer using configuration-objects since it makes code more readable and easy to maintain (most Stomple functions take a single object literal parameter which names the function's "many arguments"). 
+For example to create a Stomple client and to configure it to use destination 'jms.topic.chat' as default use:
+<pre><tt><span class="keyword">var</span><span class="normal"> client </span><span class="symbol">=</span><span class="normal"> Stomple</span><span class="symbol">.</span><span class="function">create_client</span><span class="symbol">(</span><span class="cbracket">{</span>
+<span class="normal">    url </span><span class="symbol">:</span><span class="normal"> </span><span class="string">"ws://localhost:61614/stomp"</span><span class="symbol">,</span>
+<span class="normal">    destination </span><span class="symbol">:</span><span class="normal"> </span><span class="string">"jms.topic.chat"</span><span class="symbol">,</span>
+<span class="normal">    login </span><span class="symbol">:</span><span class="normal"> </span><span class="string">"guest"</span><span class="symbol">,</span>
+<span class="normal">    passcode </span><span class="symbol">:</span><span class="normal"> </span><span class="string">"guest"</span>
+<span class="cbracket">}</span><span class="symbol">);</span>
+</tt></pre>
+A different example of using single-argument configuration objects would be subscribe:
+<pre><tt><span class="normal">client</span><span class="symbol">.</span><span class="function">subscribe</span><span class="symbol">(</span><span class="cbracket">{</span>
+<span class="normal">    success</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">frame</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span><span class="comment">//called if subscribe succeeds within timeout-period</span>
+<span class="normal">        </span><span class="comment">//subscribe succeeded... do something</span>
+<span class="normal">    </span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">    failure</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">spec</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span><span class="comment">//called if subscribe fails or times out</span>
+<span class="normal">        console</span><span class="symbol">.</span><span class="function">log</span><span class="symbol">(</span><span class="normal">spec</span><span class="symbol">.</span><span class="normal">reason</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">    handler</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">msg</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span><span class="comment">//called when a message arrived ('this' is scope - see below) </span>
+<span class="normal">        </span><span class="keyword">this</span><span class="symbol">.</span><span class="normal">received </span><span class="symbol">=</span><span class="normal"> msg</span><span class="symbol">.</span><span class="normal">body</span><span class="symbol">;</span><span class="comment">//"this" is "someObject"</span>
+<span class="normal">    </span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">    scope</span><span class="symbol">:</span><span class="normal"> someObject</span>
+<span class="cbracket">}</span><span class="symbol">);</span></tt></pre>
+Note by the way that if <tt>client.autoConnect</tt> is true (which it is by default), then you don't have to explicitly connect. Stomple will automatically connect upon your first action. The subscribe function supports an optional destination parameter in-case a default wasn't supplied when the client object was created (or in case you want to subscribe to a non-default destination). 
+
+
+<strong>How</strong>?
+For each Stomp client frame  (command): SEND, SUBSCRIBE, UNSUBSCRIBE, BEGIN, COMMIT, ABORT,  ACK, DISCONNECT there are  corresponding lower-case functions on the client object, e.g., send, subscribe... Defaults are specified when creating the client object. For example.
+<pre><tt><span class="keyword">var</span><span class="normal"> client </span><span class="symbol">=</span><span class="normal"> Stomple</span><span class="symbol">.</span><span class="function">create_client</span><span class="symbol">(</span><span class="cbracket">{</span>
+<span class="normal">    url </span><span class="symbol">:</span><span class="normal"> </span><span class="string">"ws://localhost:61614/stomp"</span><span class="symbol">,</span>
+<span class="normal">    destination </span><span class="symbol">:</span><span class="normal"> </span><span class="string">"jms.topic.chat"</span><span class="symbol">,</span>
+<span class="normal">    login </span><span class="symbol">:</span><span class="normal"> </span><span class="string">"guest"</span><span class="symbol">,</span>
+<span class="normal">    passcode </span><span class="symbol">:</span><span class="normal"> </span><span class="string">"guest"</span><span class="symbol">,</span>
+<span class="normal">    autoConnect</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">true</span><span class="symbol">,</span><span class="comment">//which is actually the default</span>
+<span class="normal">    timeout</span><span class="symbol">:</span><span class="normal"> </span><span class="number">3000</span><span class="symbol">,</span>
+<span class="normal">    autoReceipt</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">true</span><span class="comment">//which is actually the default</span>
+<span class="normal">    </span><span class="comment">//...</span>
+<span class="cbracket">}</span><span class="symbol">);</span>
+</tt></pre>
+See Stomple.ClientPrototype for all overrides.
+
+Once a client object is created, the user can issue commands. For example, in the chat example a typical sequence would be.
+<pre><tt><span class="normal">client</span><span class="symbol">.</span><span class="function">subscribe</span><span class="symbol">(</span><span class="cbracket">{</span>
+<span class="normal">    handler </span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">(</span><span class="normal">msg</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span><span class="comment">//update screen on chat msg receiption</span>
+<span class="normal">	    </span><span class="keyword">var</span><span class="normal"> c </span><span class="symbol">=</span><span class="normal"> document</span><span class="symbol">.</span><span class="function">getElementById</span><span class="symbol">(</span><span class="string">'content'</span><span class="symbol">);</span>
+<span class="normal">	    c</span><span class="symbol">.</span><span class="normal">innerHTML </span><span class="symbol">=</span><span class="normal"> c</span><span class="symbol">.</span><span class="normal">innerHTML </span><span class="symbol">+</span><span class="normal"> </span><span class="string">'&lt;br&gt;'</span><span class="normal"> </span><span class="symbol">+</span><span class="normal"> msg</span><span class="symbol">.</span><span class="normal">body</span><span class="symbol">;</span>
+<span class="normal">	</span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">	scope </span><span class="symbol">:</span><span class="normal"> anObjectIfNeeded</span><span class="symbol">,</span>
+<span class="normal">	success </span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span><span class="comment">// did subscription succeed?</span>
+<span class="normal">        </span><span class="comment">//send a test message</span>
+<span class="normal">        client</span><span class="symbol">.</span><span class="function">send</span><span class="symbol">(</span><span class="cbracket">{</span>
+<span class="normal">            body</span><span class="symbol">:</span><span class="normal"> </span><span class="string">"User krukow joined chatroom #stomple"</span><span class="symbol">,</span>
+<span class="normal">            success</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">              console</span><span class="symbol">.</span><span class="function">log</span><span class="symbol">(</span><span class="string">"sent welcome message..."</span><span class="symbol">);</span><span class="normal">          </span>
+<span class="normal">            </span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">            failure</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">              console</span><span class="symbol">.</span><span class="function">log</span><span class="symbol">(</span><span class="string">"Failed..."</span><span class="symbol">);</span>
+<span class="normal">            </span><span class="cbracket">}</span>
+<span class="normal">            </span>
+<span class="normal">        </span><span class="cbracket">}</span><span class="symbol">);</span>
+<span class="normal">	</span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">	failure </span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span><span class="comment">// did subscription fail?</span>
+<span class="normal">		console</span><span class="symbol">.</span><span class="function">log</span><span class="symbol">(</span><span class="string">"sub fail"</span><span class="symbol">);</span>
+<span class="normal">	</span><span class="cbracket">}</span>
+<span class="cbracket">}</span><span class="symbol">);</span></tt></pre>
+
+Things are pretty straightforward from here (if you get Stomp :)). For more advanced examples see the automated test-suite. Here is an example of a transaction.
+<pre><tt><span class="keyword">this</span><span class="symbol">.</span><span class="normal">client</span><span class="symbol">.</span><span class="function">begin</span><span class="symbol">(</span><span class="cbracket">{</span>
+<span class="normal">    failure</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        Y</span><span class="symbol">.</span><span class="normal">Assert</span><span class="symbol">.</span><span class="function">fail</span><span class="symbol">(</span><span class="string">"Begin transaction failed."</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">    success</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span><span class="normal"> </span>
+<span class="normal">		</span><span class="keyword">for</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">i</span><span class="symbol">=</span><span class="number">0</span><span class="symbol">;</span><span class="normal">i</span><span class="symbol">&lt;</span><span class="normal">N</span><span class="symbol">;</span><span class="normal">i</span><span class="symbol">+=</span><span class="number">1</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">			</span><span class="keyword">this</span><span class="symbol">.</span><span class="normal">client</span><span class="symbol">.</span><span class="function">send</span><span class="symbol">(</span><span class="cbracket">{</span>
+<span class="normal">				body</span><span class="symbol">:</span><span class="normal"> </span><span class="string">""</span><span class="symbol">+</span><span class="normal">msgBodies</span><span class="symbol">[</span><span class="normal">i</span><span class="symbol">],</span>
+<span class="normal">				failure</span><span class="symbol">:</span><span class="normal"> sendFailed</span>
+<span class="normal">                </span><span class="comment">//we don't wait for receipts here... Socket provies order..</span>
+<span class="normal">			</span><span class="cbracket">}</span><span class="symbol">);</span>
+<span class="normal">		</span><span class="cbracket">}</span>
+<span class="normal">        </span><span class="keyword">this</span><span class="symbol">.</span><span class="normal">client</span><span class="symbol">.</span><span class="function">commit</span><span class="symbol">(</span><span class="cbracket">{</span>
+<span class="normal">            failure</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">                Y</span><span class="symbol">.</span><span class="normal">Assert</span><span class="symbol">.</span><span class="function">fail</span><span class="symbol">(</span><span class="string">"Commit transaction failed."</span><span class="symbol">);</span>
+<span class="normal">            </span><span class="cbracket">}</span><span class="symbol">,</span>
+<span class="normal">            success</span><span class="symbol">:</span><span class="normal"> </span><span class="keyword">function</span><span class="symbol">()</span><span class="cbracket">{</span><span class="comment">//...</span>
+<span class="normal">            </span><span class="cbracket">}</span>
+<span class="normal">        </span><span class="cbracket">}</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="cbracket">}</span>
+<span class="cbracket">}</span><span class="symbol">);</span></tt></pre>
+ 
