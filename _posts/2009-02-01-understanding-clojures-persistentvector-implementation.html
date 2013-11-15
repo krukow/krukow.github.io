@@ -11,19 +11,19 @@ published: true
 meta:
   _edit_last: '1'
 ---
-Update: <a href="http://blog.higher-order.net/2009/09/08/understanding-clojures-persistenthashmap-deftwice/">See also the description of PersistentHashMap</a>.
+Update: <a href="http://blog.higher-order.net/2009/09/08/understanding-clojures-persistenthashmap-deftwice">See also the description of PersistentHashMap</a>.
 
 One of the unique features of Clojure is that the <a href="http://clojure.org/data_structures">core data structures</a> are persistent (immutable with efficient structural sharing). This includes data structures Vector and Map that are mutable in most other languages. To be useful, operations on persistent data structures need to have performance characteristics that are similar to their mutating counterparts; e.g., the cost of random access on a persistent vector (put/get) needs to be comparable to random access to a mutable vector. Clojure manages to achieve this. Here we focus on understanding the Clojure implementation of Vector: <a href="http://code.google.com/p/clojure/source/browse/trunk/src/jvm/clojure/lang/PersistentVector.java">PersistentVector</a>.
 
 <strong>The basics.</strong> PersistentVector stores its elements in arrays, each array having at most size 32. One can think of the arrays as forming a wide balanced tree with each node having at most 32 children. Here is an example of what a size <span style="font-family: courier-new;">32<sup>2</sup> = 1024</span> PersistentVector tree might look like.
 
-<img src="http://blog.higher-order.net/files/clj/persistentvector1.png" alt="PersistentVector example" />
+<img src="http://web.archive.org/web/20130310175914/http://blog.higher-order.net/files/clj/persistentvector1.png" alt="PersistentVector example" />
 
 The root of the tree is a pointer to a size-32 array ("blue") which has 32 children ("red"). The 32 red arrays each have 32 references to actual 1024 objects stored in the PersistentVector.
 
 <strong>Fetching elements (get).</strong> The key to understanding PersistentVector is to look at the binary representation of the numbers that index the vector. Java uses <a href="http://java.sun.com/docs/books/jls/second_edition/html/typesValues.doc.html#85587">32 bits for ints</a> <a href="http://en.wikipedia.org/wiki/Two%27s_complement">with signed two's-complement representation</a>. Examples:
 
-<img src="http://blog.higher-order.net/files/clj/bin-map1.png" alt="Binary representation examples" />
+<img src="http://web.archive.org/web/20130310175905/http://blog.higher-order.net/files/clj/bin-map1.png" alt="Binary representation examples" />
 
 One can think of this binary representation as divided into chunks of 5 bits, represented in colors here. These "chunks" are mapped to levels in the tree: for example, when fetching the element at 16, one looks at the the "blue" bits  (00000) -- this determines the index at the root child array (0); following that pointer, the "red" bits (10000) determines the index at the first level (16). When fetching index 49 the blue bits index to 1 and the red bits index to 17.
 
@@ -51,7 +51,7 @@ In general <tt>shift</tt> determines the right-shift needed to access the root i
 <strong>Insertion (put).</strong> 
 Insertion is more tricky. Here we consider only the 'cons' method which appends an element to the end of the vector. The method which replaces the element at an index is easy once 'cons' and 'nth' is understood. Of course, since PersistentVector is immutable 'cons' really returns a new PersistentVector object which is equal to the old one except that it has the new element at the end. With cons, the tree grows only in a balanced way: elements are added at the deepest level at the rightmost array. If the PersistentVector contains a number of elements which is a power of 32 (e.g., 1024 = 32<sup>2</sup>), the height of the tree is increased by one and there is now "room" for 32 times more elements. In our example from before, suppose we add an element at the end of the vector. We obtain this tree:
 
-<img src="http://blog.higher-order.net/files/clj/persistentvector2.png" alt="Consing persistent vector" />
+<img src="http://web.archive.org/web/20130310175905/http://blog.higher-order.net/files/clj/persistentvector2.png" alt="Consing persistent vector" />
 
 Notice that the entire old PersistentVector is shared with the new PersistentVector! No copying is involved in this particular case.
 
@@ -122,4 +122,3 @@ While the code for 'cons' is intricate, the idea is reasonably simple as illustr
 <span class="normal">	</span><span class="keyword">return</span><span class="normal"> ret</span><span class="symbol">;</span>
 <span class="cbracket">}</span>
 </tt></pre>
- 
