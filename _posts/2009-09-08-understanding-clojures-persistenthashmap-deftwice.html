@@ -13,7 +13,7 @@ meta:
 ---
 [sept. 8th, 21:22: fixed a +/- 1 error]
 
-In a previous post, I gave a high-level description of <a href="http://blog.higher-order.net/?p=233">how Clojure's PersistentVector is implemented.</a> While the code has changed, the description was high-level enough that the explanations still hold (although some code snipplets don't correspond to what's in <a href="http://github.com/richhickey/clojure/tree/master">Git master</a>.) 
+In a previous post, I gave a high-level description of <a href="http://blog.higher-order.net/2009/02/01/understanding-clojures-persistentvector-implementation">how Clojure's PersistentVector is implemented.</a> While the code has changed, the description was high-level enough that the explanations still hold (although some code snipplets don't correspond to what's in <a href="http://github.com/richhickey/clojure/tree/master">Git master</a>.) 
 
 In this post, I'll try to explain (also at a high level) how <code>clojure.lang.PersistentHashMap</code> works internally. Reading the mentioned post on PersistentVector is helpful as some of the concepts are the same (e.g., bit-partitioning). 
 
@@ -43,7 +43,7 @@ The root node of the tree is initially an EmptyNode. When assoc is called on Emp
 <strong>Bit-partitioning of hash-codes</strong>
 When PHM assocs a key object K with value object V, it first computes the hashCode of K, just as a hash-table would. The hash code of K yields an int, which has a 32-bit representation in Java (as I explained in <a href="http://blog.higher-order.net/?p=233">the post on PersistentVector</a>). Here are some example bit representations of numbers:
 
-<img src="http://blog.higher-order.net/files/clj/bitpartitioning1.png" alt="PersistentHashMap ilustration 1" />
+<img src="http://web.archive.org/web/20130310180226/http://blog.higher-order.net/files/clj/bitpartitioning1.png" alt="PersistentHashMap ilustration 1" />
 
 The trick that PHM uses is to partition this bit representation in to blocks of 5-bits, represented with colors in the above example. Each block corresponds to a "level" in the tree structure; for example, the right-most green block corresponds to root-level, and the orange block corresponds to the children of the root. Exactly what "corresponds" means is described below.  Levels are multiples of 5. I.e., the root level is level 0, the children of the root are level 5, the grand-children of the root are level 10, etc. Note that a block of five bits corresponds to a number in the range 0-31.  
 
@@ -58,7 +58,7 @@ The following function does this.
 <strong>Illustrating the tree structure</strong>
 I'll use the following picture (adapted from one of Rich's slides). 
 <center>
-<img src="http://blog.higher-order.net/files/clj/persistenthashmap1.png" alt="PersistentHashMap ilustration 1" />
+<img src="http://web.archive.org/web/20130310180226/http://blog.higher-order.net/files/clj/persistenthashmap1.png" alt="PersistentHashMap ilustration 1" />
 </center>
 
 The colored nodes are <tt>BitmapIndexedNode</tt>s and have between 2 and 31 children (should they get a 32nd child, they become <tt>FullNode</tt>s). A naive implementation of <tt>BitmapIndexedNode</tt> might be the following: use an int variable, <tt>level</tt>, to denote the level that this node lives in, and allocate a full 32 element array of INode references for the children. To add a new child: lookup the index via the bit-block corresponding to the level, i.e. given a hashCode <tt>hash</tt> for the child, and given the level, call <tt>mask(hash, level)</tt> to get the index in range [0, 31]. But this strategy wastes a lot of memory: each node has a full 32 element array where most entries are simply <tt>null</tt>, i.e., if there are 4 children there are 28 null references which are just wasting space.
@@ -131,4 +131,3 @@ From this you should be able to understand how find works. In combines all this:
 </tt></pre>
 
 In part 2 we look at how assoc works...
- 
