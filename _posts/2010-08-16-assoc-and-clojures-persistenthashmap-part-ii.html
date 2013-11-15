@@ -11,17 +11,17 @@ meta:
   _edit_last: '1'
   _wp_old_slug: ''
 ---
-Some time ago I wrote introductory posts that gave high-level overviews of how Clojure's PersistentVector and PersistentHashMap work. In the <a href="http://blog.higher-order.net/2009/09/08/understanding-clojures-persistenthashmap-deftwice/">PersistentHashMap post</a> I promised that "In part 2 we look at how assoc works…" - it seems I never got around to that!
+Some time ago I wrote introductory posts that gave high-level overviews of how Clojure's PersistentVector and PersistentHashMap work. In the <a href="http://blog.higher-order.net/2009/09/08/understanding-clojures-persistenthashmap-deftwice">PersistentHashMap post</a> I promised that "In part 2 we look at how assoc works…" - it seems I never got around to that!
 
 A lot of interesting things have happened with data structures in JVM-land since then: <a href="http://github.com/krestenkrab/erjang">Erjang</a> uses Clojure's data structures, it looks like Scala <a href="https://lampsvn.epfl.ch/trac/scala/ticket/3724">is porting PersistentVector</a>, <a href="http://olabini.com/blog/2010/07/preannouncing-seph/">upcoming Seph</a> is using them too. My <a href="http://blog.higher-order.net/2010/06/11/clj-ds-clojures-persistent-data-structures-for-java/">clj-ds project</a> should help in this regard: I've extracted the data structures of Clojure from its compiler for use with JVM-based languages (providing some extra stuff like reverse and "positioned" iterators). There are already people interested in using this in Java land.
 
-Some people have asked for the "part ii" post, and my son just fell asleep, so ... :) Most of what is described in the <a href="http://blog.higher-order.net/2009/09/08/understanding-clojures-persistenthashmap-deftwice/">PersistentHashMap post</a> is still true, however there have been optimizations and simplifications which I explain here. Note: before reading this post, you should read the previous post on PersistentHashMap.
+Some people have asked for the "part ii" post, and my son just fell asleep, so ... :) Most of what is described in the <a href="http://blog.higher-order.net/2009/09/08/understanding-clojures-persistenthashmap-deftwice">PersistentHashMap post</a> is still true, however there have been optimizations and simplifications which I explain here. Note: before reading this post, you should read the previous post on PersistentHashMap.
 
 <strong>First, some changes</strong>. Previously there were five implementations of the <tt>INode</tt> interface; this has changed and there are now only three implementations: <tt>ArrayNode</tt>, <tt>BitmapIndexedNode</tt> and <tt>HashCollisionNode</tt>. This means that: <tt>EmptyNode, LeafNode, FullNode</tt> are out, with <tt>ArrayNode</tt> replacing <tt>FullNode</tt>. An array node is an array where the entries are null or instances of INode, i.e., it stores other nodes but not any key-value pairs. An empty persistent hash map is simply a persistent hash map where the root node is null -- this removes the need for EmptyNode. Finally, leaf nodes used to store the actual entries stored in the map. Leaf nodes are out, and instead BitmapIndexedNodes directly embed the map entries in their arrays. 
 
 The idea is the following: if, in the old implementation, a BitmapIndexedNode would store a leaf node at an index, then instead, it now embeds the key and value directly in its array. This array used to be of type <tt>INode[]</tt>, storing only nodes, but is now a mixed object array for which the value can be one of: a map key, a map entry, null or an INode object. 
 
-<img src="http://blog.higher-order.net/files/clj/persistenthashmap1.png" alt="Old persistent hashmap structure" />
+<img src="http://web.archive.org/web/20130310175905/http://blog.higher-order.net/files/clj/persistenthashmap1.png" alt="Old persistent hashmap structure" />
 
 <em>The above drawing corresponds to the old structure.</em> In the new structure all the white circles (the leaf nodes) are embedded directly in their parents.
 
@@ -29,7 +29,7 @@ The idea is the following: if, in the old implementation, a BitmapIndexedNode wo
 
 for all the indices that are in the bitmap, the even indices store keys or null; the odd indices store values or INode objects. Key-value pairs are layed out in sequence, so that if index <tt>2*i</tt> is a key then index <tt>2*i + 1</tt> is a value. If an index <tt>2*i</tt> is null then <tt>2*i+1</tt> must be a non-null INode object.
 
-Note: if you don't remember how bitpos, bitmap and index work see <a href="http://blog.higher-order.net/2009/09/08/understanding-clojures-persistenthashmap-deftwice/">the part i post</a>.
+Note: if you don't remember how bitpos, bitmap and index work see <a href="http://blog.higher-order.net/2009/09/08/understanding-clojures-persistenthashmap-deftwice">the part i post</a>.
 
 The strategy used in BitmapIndexedNode is that it can store up to 16 entries in the bit map: if the size grows above 16, it is converted to a FullNode. 
 
@@ -37,7 +37,7 @@ The strategy used in BitmapIndexedNode is that it can store up to 16 entries in 
 
 <em>Beware</em>: the following drawing looks confusing: take the time and read the explanation. It is showing two persistent hash maps, where one is obtained by assoc'ing to the first. Again this is a modified version of one of Rich's slides. 
 
-<img style="position: relative; left:-20px;" src="http://blog.higher-order.net/files/clj/persistenthashmap-pathcopy.png" alt="Path copying in the old structure" />
+<img style="position: relative; left:-20px;" src="http://web.archive.org/web/20130310175905/http://blog.higher-order.net/files/clj/persistenthashmap-pathcopy.png" alt="Path copying in the old structure" />
 
 The first map is rooted on the left (where the left-most box points to). The second is rooted where the right-most box points to. The nodes are grouped in three, each indicated by a colored circle that surrounds it. The new node is in the right-most, lower corner.
 
@@ -118,4 +118,3 @@ The first block up to the 'for' loop prepares the array of INodes that will be t
 Finally, the for-loop copies all the other nodes that are stored in this bitmap indexed node into the new array node. This entails mapping between the bitmap index scheme and the "5-bit hash-block" scheme. For each possible index in the bitmap node, only do work if the index is present in the bit map: <tt>if(((bitmap >>> i) & 1) != 0)</tt>. The variable <tt>j</tt> runs through the even indexes, and according to the invariant: null means that <tt>j+1</tt> is an INode, and non-null means it is a value in a map entry.
 
 I am wondering if there is an optimization possible here? We are looping through all possible indices of the new ArrayNode, but we know that we only have to do something on the indices that correspond to an non-zero index in the bit map; and there can be only 15 of those... Would it be possible to iterate only those using some strategy? If I figure something out, I'll let you know :)
- 
